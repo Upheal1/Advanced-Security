@@ -1,0 +1,166 @@
+# MindQuest Flutter App - Cursor Rules
+
+## Project Overview
+This is a Flutter mental health gamification app called "MindQuest" that helps users track their mental health, complete missions, and build healthy habits through gamification.
+
+## Architecture & Patterns
+
+### State Management
+- **Provider Pattern**: Use `provider` package for state management
+- **Models**: All models extend `ChangeNotifier` and use `notifyListeners()` for state updates
+- **Key Models**: AuthModel, UserModel, ThemeModel, NavigationModel, StepTrackerState, StreakState, etc.
+
+### Project Structure
+```
+lib/
+├── constants/          # App-wide constants (colors, themes)
+├── models/            # Data models and state management
+├── screens/           # UI screens
+├── widgets/           # Reusable widgets
+├── services/          # Business logic and API services
+├── features/          # Feature-specific code (e.g., steps/)
+└── utils/             # Utility functions
+```
+
+### Navigation
+- **Root Navigation**: Uses `RootNav` with drawer-based navigation
+- **Auth Flow**: `AuthWrapper` handles authentication state and shows LoginScreen or RootNav
+- **Navigation Model**: `NavigationModel` manages the current screen index
+- **Global Keys**: `rootNavScaffoldKey` for drawer access, `navigatorKey` for global navigation
+
+### Theme System
+- **Theme Model**: `ThemeModel` manages light/dark mode
+- **Theme Switcher**: Available in drawer, supports "Bright Mood" (light) and "Dark Mode"
+- **Colors**: Use `AppColors` class - avoid hardcoded colors like `sereneTeal`, `deepCharcoal`, `warmSunset`, `pureWhite`
+- **Available Colors**: `purple`, `teal`, `orange`, `pink`, `green`, `red`, `textPrimary`, `textSecondary`, `surface`, `surfaceDark`
+
+## Code Style Guidelines
+
+### Naming Conventions
+- **Files**: snake_case (e.g., `home_screen.dart`, `auth_model.dart`)
+- **Classes**: PascalCase (e.g., `HomeScreen`, `AuthModel`)
+- **Variables/Methods**: camelCase (e.g., `userModel`, `_handleSignUp`)
+- **Private Members**: Prefix with underscore (e.g., `_isLoading`, `_buildCard`)
+
+### Widget Patterns
+- Use `const` constructors where possible
+- Prefer `StatelessWidget` unless state management is needed
+- Use `Consumer<T>` or `Selector` for Provider state access
+- Always check `mounted` before `setState` in async operations
+
+### Error Handling
+- Wrap async operations in try-catch blocks
+- Use `mounted` checks before UI updates in async callbacks
+- Show user-friendly error messages via SnackBar or AlertDialog
+- Log errors with `debugPrint` for debugging
+
+### Navigation Best Practices
+- Use `Navigator.of(context).push()` for new screens
+- Use `Navigator.of(context).popUntil((route) => route.isFirst)` to return to root
+- After authentication changes, let `AuthWrapper` handle navigation automatically via Consumer rebuild
+- Use `rootNavigator: true` when closing dialogs that might block navigation
+
+### Theme-Aware Code
+- Always use `Theme.of(context).brightness` to check dark/light mode
+- Use `Theme.of(context).scaffoldBackgroundColor` instead of hardcoded colors
+- Replace hardcoded `Colors.white` with theme-aware alternatives:
+  - Dark mode: `Colors.white`
+  - Light mode: `AppColors.textPrimary` or `AppColors.surface`
+- Use conditional colors: `Theme.of(context).brightness == Brightness.dark ? Colors.white : AppColors.textPrimary`
+
+## Common Issues & Solutions
+
+### Missing Color References
+If you see errors about missing colors (`sereneTeal`, `deepCharcoal`, etc.):
+- Replace `sereneTeal` → `teal`
+- Replace `deepCharcoal` → `textPrimary`
+- Replace `warmSunset` → `orange`
+- Replace `pureWhite` → `Colors.white` or `AppColors.surface`
+
+### Navigation Issues
+- **Drawer not opening**: Use `rootNavScaffoldKey.currentState?.openDrawer()` with null check
+- **Auth state not updating**: Ensure `notifyListeners()` is called after state changes
+- **Signup not navigating**: Wait for auth state to propagate before navigation, use `popUntil` to return to root
+
+### Overflow Errors
+- Use `mainAxisSize: MainAxisSize.min` in Columns
+- Reduce spacing and font sizes in tight layouts
+- Use `shrinkWrap: true` in GridView/ListView when inside ScrollView
+- Add padding constraints to prevent overflow
+
+### Provider Context Issues
+- Use `Provider.of<T>(context, listen: false)` in callbacks/initState
+- Use `context.read<T>()` for one-time reads
+- Use `context.watch<T>()` or `Consumer<T>` for reactive updates
+- Always check `mounted` before accessing context in async operations
+
+### Async Initialization
+- Initialize services asynchronously to avoid blocking app startup
+- Use `.catchError()` for non-critical initialization failures
+- Show loading states while initializing
+
+## Dependencies
+
+### Key Packages
+- `provider`: State management
+- `firebase_core`, `firebase_auth`, `cloud_firestore`: Firebase services
+- `google_fonts`: Typography
+- `lucide_icons`: Icons
+- `hive_flutter`, `hive`: Local storage
+- `dio`: HTTP client
+- `shared_preferences`: Simple key-value storage
+- `flutter_local_notifications`: Notifications
+- `pedometer`: Step tracking
+- `fl_chart`: Charts and graphs
+
+### Temporarily Disabled
+- `workmanager`: Disabled due to compatibility issues with Flutter embedding
+
+## Firebase Integration
+- Uses Firebase Authentication and Firestore
+- User data stored in `users` collection
+- Assessment completion tracked per user with UID-based keys
+
+## Testing & Debugging
+- Use `debugPrint` for logging (not `print`)
+- Check Flutter console for errors
+- Verify mounted state before UI updates
+- Test both light and dark themes
+
+## Performance Considerations
+- Use `Selector` instead of `Consumer` when only specific fields are needed
+- Minimize rebuilds by using `const` widgets
+- Initialize heavy services asynchronously
+- Use `shrinkWrap: true` and `NeverScrollableScrollPhysics` for nested scrollables
+
+## When Making Changes
+
+1. **Always check for linter errors** after making changes
+2. **Test in both light and dark themes**
+3. **Verify navigation flows** work correctly
+4. **Ensure async operations** have proper error handling
+5. **Check for overflow errors** in layouts
+6. **Use theme-aware colors** instead of hardcoded values
+7. **Verify Provider context** is available before use
+8. **Test authentication flows** (signup, login, logout)
+
+## Common Tasks
+
+### Adding a New Screen
+1. Create screen file in `lib/screens/`
+2. Add to `_screens` list in `RootNav` if needed
+3. Add navigation item to `_navItems` if needed
+4. Ensure theme-aware styling
+
+### Adding a New Model
+1. Extend `ChangeNotifier`
+2. Add to `MultiProvider` in `MindQuestApp`
+3. Use `notifyListeners()` for state changes
+4. Provide getters for public state
+
+### Fixing Theme Issues
+1. Replace hardcoded colors with theme-aware alternatives
+2. Use `Theme.of(context).brightness` checks
+3. Test in both light and dark modes
+4. Update gradients and borders to be theme-aware
+
