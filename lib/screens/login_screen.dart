@@ -1,5 +1,6 @@
 // lib/screens/login_screen.dart
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -34,26 +35,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
       try {
         final authModel = Provider.of<AuthModel>(context, listen: false);
-        print('Attempting login for: ${_emailController.text}');
+        if (kDebugMode) debugPrint('Attempting login for: ${_emailController.text}');
         final result = await authModel.login(
             _emailController.text, _passwordController.text);
 
         if (mounted) setState(() => _isLoading = false);
 
         if (result == true) {
-          // Login successful
           _showSuccessDialog();
         } else if (result == null) {
-          // 2FA required
           _showErrorDialog('OTP sent to your email. Please verify.');
         } else {
-          // Login failed
           _showErrorDialog('Invalid email or password');
         }
       } catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
-          print('Login error: $e');
+          if (kDebugMode) debugPrint('Login error: $e');
           _showErrorDialog('An unexpected error occurred. Please try again.');
         }
       }
@@ -227,7 +225,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (emailController.text.isNotEmpty) {
                   final authModel =
                   Provider.of<AuthModel>(context, listen: false);
-                  await authModel.sendPasswordResetEmail(emailController.text);
+                  await authModel
+                      .sendPasswordResetEmail(emailController.text);
 
                   Navigator.of(context).pop();
 
@@ -324,7 +323,6 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 40),
 
-                // 3D Character Illustration
                 Container(
                   width: 120,
                   height: 120,
@@ -347,7 +345,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 40),
 
-                // Welcome Text
                 Text(
                   'Welcome Back!',
                   style: GoogleFonts.inter(
@@ -367,7 +364,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 40),
 
-                // Glassmorphism Card
                 _buildGlassmorphismCard(),
               ],
             ),
@@ -438,8 +434,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your password';
                       }
-                      if (value.length < 6) {
-                        return 'Password must be at least 6 characters';
+                      if (value.length < 8) {
+                        return 'Password must be at least 8 characters';
                       }
                       if (value.length > 50) {
                         return 'Password is too long';
@@ -642,7 +638,9 @@ class _LoginScreenState extends State<LoginScreen> {
           suffixIcon: isPassword
               ? IconButton(
             icon: Icon(
-              _isPasswordVisible ? LucideIcons.eyeOff : LucideIcons.eye,
+              _isPasswordVisible
+                  ? LucideIcons.eyeOff
+                  : LucideIcons.eye,
               color: Colors.white.withOpacity(0.7),
               size: 20,
             ),
@@ -670,7 +668,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           filled: true,
           fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
         validator: validator,
       ),

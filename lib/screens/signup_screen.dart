@@ -1,6 +1,6 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -37,9 +37,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       setState(() {
         if (password.isEmpty) {
           _passwordStrength = '';
-        } else if (password.length < 6) {
+        } else if (password.length < 8) {
           _passwordStrength = 'Weak';
-        } else if (password.length >= 6 && password.length < 10) {
+        } else if (password.length >= 8 && password.length < 10) {
           _passwordStrength = 'Medium';
         } else if (password.length >= 10 &&
             RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)').hasMatch(password)) {
@@ -65,22 +65,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
         );
 
         if (!success) {
-          // Failed signup, show generic error
           if (mounted) {
             _showErrorDialog('Failed to create account. Please try again.');
           }
         } else {
-          // Signup success
           if (mounted) {
-            // Small delay to ensure auth state updates and AuthWrapper rebuilds
             await Future.delayed(const Duration(milliseconds: 300));
             _showSuccessDialog();
           }
         }
       } catch (e) {
         if (mounted) {
+          if (kDebugMode) debugPrint('SignUp error: $e');
           _showErrorDialog(
-              'An unexpected error occurred. Please try again.\n${e.toString()}');
+              'An unexpected error occurred. Please try again.');
         }
       } finally {
         if (mounted) {
@@ -138,18 +136,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _completeSignupNavigation() {
     if (!mounted) return;
-    // Close the success dialog first
     Navigator.of(context, rootNavigator: true).pop();
-    // Wait for auth state to propagate and AuthWrapper to rebuild
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted) return;
       try {
-        // Pop back to root (AuthWrapper)
-        // AuthWrapper's Consumer will detect authenticated state and show RootNav
         Navigator.of(context).popUntil((route) => route.isFirst);
       } catch (e) {
-        debugPrint('Navigation error after signup: $e');
-        // Fallback: try to pop once if possible
+        if (kDebugMode) debugPrint('Navigation error after signup: $e');
         if (mounted && Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
         }
@@ -170,7 +163,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
             backgroundColor: Colors.green.shade50,
             title: Row(
               children: [
-                Icon(Icons.celebration, color: Colors.green.shade600, size: 28),
+                Icon(Icons.celebration,
+                    color: Colors.green.shade600, size: 28),
                 const SizedBox(width: 12),
                 Text(
                   'Welcome to UpHeal!',
@@ -202,7 +196,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.star, color: Colors.amber.shade600, size: 20),
+                      Icon(Icons.star,
+                          color: Colors.amber.shade600, size: 20),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -236,7 +231,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
       },
     );
 
-    // Auto-close dialog after 2 seconds and navigate
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         _completeSignupNavigation();
@@ -302,7 +296,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-                // Glassmorphism Card
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
@@ -337,7 +330,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Fields...
                               _buildGlassmorphismField(
                                 controller: _emailController,
                                 label: 'Email Address',
@@ -386,8 +378,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   if (value == null || value.isEmpty) {
                                     return 'Please enter your password';
                                   }
-                                  if (value.length < 6) {
-                                    return 'Password must be at least 6 characters';
+                                  if (value.length < 8) {
+                                    return 'Password must be at least 8 characters';
                                   }
                                   if (value.length > 50) {
                                     return 'Password is too long';
@@ -416,14 +408,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 },
                               ),
                               const SizedBox(height: 30),
-                              // Sign Up Button
                               Container(
                                 width: double.infinity,
                                 height: 50,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
                                   gradient: const LinearGradient(
-                                    colors: [Color(0xFF7C3AED), Color(0xFFF97316)],
+                                    colors: [
+                                      Color(0xFF7C3AED),
+                                      Color(0xFFF97316)
+                                    ],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
@@ -434,7 +428,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   ],
                                 ),
                                 child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _handleSignUp,
+                                  onPressed:
+                                  _isLoading ? null : _handleSignUp,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.transparent,
                                     shadowColor: Colors.transparent,
@@ -448,7 +443,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                      valueColor:
+                                      AlwaysStoppedAnimation<Color>(
                                           Colors.white),
                                     ),
                                   )
@@ -463,7 +459,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 ),
                               ),
                               const SizedBox(height: 30),
-                              // Divider
                               Row(
                                 children: [
                                   Expanded(
@@ -473,8 +468,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     ),
                                   ),
                                   Padding(
-                                    padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
                                     child: Text(
                                       'Or sign up with',
                                       style: GoogleFonts.inter(
@@ -493,11 +488,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               ),
                               const SizedBox(height: 30),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                mainAxisAlignment:
+                                MainAxisAlignment.spaceEvenly,
                                 children: [
                                   _buildSocialButton(LucideIcons.mail, 'G'),
                                   _buildSocialButton(LucideIcons.apple, ''),
-                                  _buildSocialButton(LucideIcons.facebook, 'f'),
+                                  _buildSocialButton(
+                                      LucideIcons.facebook, 'f'),
                                 ],
                               ),
                               const SizedBox(height: 30),
@@ -644,7 +641,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           suffixIcon: isPassword
               ? IconButton(
             icon: Icon(
-              _isPasswordVisible ? LucideIcons.eyeOff : LucideIcons.eye,
+              _isPasswordVisible
+                  ? LucideIcons.eyeOff
+                  : LucideIcons.eye,
               color: Colors.white.withOpacity(0.7),
               size: 20,
             ),

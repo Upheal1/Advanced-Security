@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AiChatService {
-  static const String _apiKey = "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";
+  static const String _apiKey = String.fromEnvironment(
+    'GROQ_API_KEY',
+    defaultValue: '',
+  );
   static const String _endpoint =
       "https://api.groq.com/openai/v1/chat/completions";
 
@@ -44,25 +47,56 @@ Help the user feel heard, supported, and gently guided — like a trusted therap
       String userMessage,
       List<Map<String, String>> history,
       ) async {
-    final response = await http.post(
-      Uri.parse(_endpoint),
-      headers: {
-        "Authorization": "Bearer $_apiKey",
-        "Content-Type": "application/json",
-      },
-      body: jsonEncode({
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-          {"role": "system", "content": systemPrompt},
-          ...history,
-          {"role": "user", "content": userMessage}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 300
-      }),
-    );
+    if (_apiKey.isEmpty) {
+      throw Exception(
+        'GROQ_API_KEY is not set. '
+            'Build with: flutter run --dart-define=GROQ_API_KEY=<your_key>',
+      );
+    }
 
-    final data = jsonDecode(response.body);
-    return data["choices"][0]["message"]["content"];
+    try {
+      final response = await http.post(
+        Uri.parse(_endpoint),
+        headers: {
+          "Authorization": "Bearer $_apiKey",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "model": "llama-3.1-8b-instant",
+          "messages": [
+            {"role": "system", "content": systemPrompt},
+            ...history,
+            {"role": "user", "content": userMessage}
+          ],
+          "temperature": 0.7,
+          "max_tokens": 300
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'AI service error (${response.statusCode}). Please try again.',
+        );
+      }
+
+      final data = jsonDecode(response.body);
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Unexpected response format from AI service.');
+      }
+
+      final choices = data['choices'];
+      if (choices == null || choices is! List || choices.isEmpty) {
+        throw Exception('No response received from AI service.');
+      }
+
+      final content = choices[0]?['message']?['content'];
+      if (content == null || content is! String) {
+        throw Exception('Invalid response structure from AI service.');
+      }
+
+      return content;
+    } on FormatException {
+      throw Exception('Failed to parse AI service response.');
+    }
   }
 }

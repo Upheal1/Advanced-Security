@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -6,8 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/firebase_auth_service.dart';
 import '../services/email_service.dart' as mail;
-
-const String PASSWORD_PEPPER = 'D9f#7kLp2@wVx8qZrT1mY!uB4sE0jHcN';
+import '../config.dart';
 
 class AuthModel extends ChangeNotifier {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -17,13 +15,14 @@ class AuthModel extends ChangeNotifier {
   String? _userEmail;
   String? _userName;
   Map<String, int> _failedAttempts = {};
-  Map<String, UserProfile> _userProfiles = {}; // بيانات محلية للمزايا الإضافية
-  String? _errorMessage; // ← تخزين آخر رسالة خطأ
+  Map<String, int> _otpAttempts = {};
+  Map<String, UserProfile> _userProfiles = {};
+  String? _errorMessage;
 
   bool get isAuthenticated => _isAuthenticated;
   String? get userEmail => _userEmail;
   String? get userName => _userName;
-  String? get errorMessage => _errorMessage; // ← getter للاستخدام في UI
+  String? get errorMessage => _errorMessage;
 
   AuthModel() {
     _initializeAuth();
@@ -57,16 +56,12 @@ class AuthModel extends ChangeNotifier {
   String _generateSalt([int length = 16]) {
     final rand = Random.secure();
     final values = List<int>.generate(length, (i) => rand.nextInt(256));
-    return base64Url.encode(values);
+    return values.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
-  String _generateOtp(String email, [int length = 6]) {
-    final salt = _userProfiles[email]?.salt ?? _generateSalt();
+  String _generateOtp([int length = 6]) {
     final rand = Random.secure();
-    final otpBytes = List<int>.generate(length, (_) => rand.nextInt(10));
-    final combined = utf8.encode(otpBytes.join() + salt + PASSWORD_PEPPER);
-    final otpHash = base64Url.encode(combined);
-    return otpHash.substring(0, length);
+    return List.generate(length, (_) => rand.nextInt(10)).join();
   }
 
   String evaluatePasswordStrength(String password) {
@@ -82,7 +77,8 @@ class AuthModel extends ChangeNotifier {
 
   Future<bool> signUp(String email, String password, String name) async {
     try {
-      final userCredential = await _firebaseAuthService.createUserWithEmailAndPassword(email, password);
+      final userCredential = await _firebaseAuthService
+          .createUserWithEmailAndPassword(email, password);
       if (userCredential != null) {
         await _firebaseAuthService.updateUserProfile(displayName: name);
         _userProfiles[email] = UserProfile(
@@ -96,14 +92,14 @@ class AuthModel extends ChangeNotifier {
         _isAuthenticated = true;
         _userEmail = email;
         _userName = name;
-        _errorMessage = null; // ← حذف الخطأ إذا نجح
+        _errorMessage = null;
         notifyListeners();
         return true;
       }
       _errorMessage = 'Failed to create account';
       return false;
     } catch (e) {
-      print('Signup error: $e');
+      if (kDebugMode) debugPrint('Signup error: $e');
       _errorMessage = e.toString();
       notifyListeners();
       return false;
@@ -112,54 +108,109 @@ class AuthModel extends ChangeNotifier {
 
   Future<bool?> login(String email, String password) async {
     try {
-      final profile = _userProfiles[email];
-
-      if (profile != null && profile.lockUntil != null) {
-        final lockDate = DateTime.tryParse(profile.lockUntil!);
+      final storedLock = await _storage.read(key: 'lock_$email');
+      if (storedLock != null) {
+        final lockDate = DateTime.tryParse(storedLock);
         if (lockDate != null && lockDate.isAfter(DateTime.now())) {
           _errorMessage = 'Account is temporarily locked. Try again later.';
+          notifyListeners();
           return false;
+        } else {
+          await _storage.delete(key: 'lock_$email');
         }
       }
 
-      final userCredential = await _firebaseAuthService.signInWithEmailAndPassword(email, password);
+      final userCredential = await _firebaseAuthService
+          .signInWithEmailAndPassword(email, password);
+
       if (userCredential != null) {
         _failedAttempts[email] = 0;
-        profile?.lockUntil = null;
+        await _storage.delete(key: 'lock_$email');
+
+        final profile = _userProfiles[email];
         profile?.lastLogin = DateTime.now().toIso8601String();
-        profile?.activities.insert(0, '${DateTime.now().toIso8601String()} - Successful login');
+        profile?.activities
+            .insert(0, '${DateTime.now().toIso8601String()} - Successful login');
 
         if (profile != null && profile.is2FAEnabled) {
-          final otp = _generateOtp(email);
+          final otp = _generateOtp();
+          final expiry = DateTime.now()
+              .add(const Duration(minutes: 10))
+              .toIso8601String();
           await _storage.write(key: 'otp_$email', value: otp);
+          await _storage.write(key: 'otp_${email}_expiry', value: expiry);
+          await _storage.delete(key: 'otp_${email}_attempts');
           await mail.EmailService.sendOtp(email, otp);
-          profile.activities.insert(0, '${DateTime.now().toIso8601String()} - OTP sent for 2FA');
+          profile.activities.insert(
+              0, '${DateTime.now().toIso8601String()} - OTP sent for 2FA');
           return null;
         }
 
         _isAuthenticated = true;
         _userEmail = email;
-        _userName = profile?.name ?? '';
+        _userName = _userProfiles[email]?.name ?? '';
         _errorMessage = null;
         notifyListeners();
         return true;
       }
       _errorMessage = 'Invalid email or password';
+      notifyListeners();
       return false;
     } catch (e) {
-      print('Login error: $e');
-      _errorMessage = e.toString();
+      if (kDebugMode) debugPrint('Login error: $e');
       _failedAttempts[email] = (_failedAttempts[email] ?? 0) + 1;
       if (_failedAttempts[email]! >= 5) {
-        final lockUntil = DateTime.now().add(const Duration(minutes: 10));
-        _userProfiles[email]?.lockUntil = lockUntil.toIso8601String();
+        final lockUntil =
+        DateTime.now().add(const Duration(minutes: 10)).toIso8601String();
+        await _storage.write(key: 'lock_$email', value: lockUntil);
+        if (!_userProfiles.containsKey(email)) {
+          _userProfiles[email] = UserProfile(
+            email: email,
+            name: '',
+            salt: _generateSalt(),
+            is2FAEnabled: false,
+            isBiometricEnabled: false,
+            activities: [],
+          );
+        }
+        _userProfiles[email]?.lockUntil = lockUntil;
       }
+      _errorMessage = e.toString();
       notifyListeners();
       return false;
     }
   }
 
   Future<bool> verifyOtp(String email, String otp) async {
+    final attemptsStr =
+        await _storage.read(key: 'otp_${email}_attempts') ?? '0';
+    final attempts = int.tryParse(attemptsStr) ?? 0;
+
+    if (attempts >= 5) {
+      await _storage.delete(key: 'otp_$email');
+      await _storage.delete(key: 'otp_${email}_expiry');
+      await _storage.delete(key: 'otp_${email}_attempts');
+      _errorMessage = 'Too many OTP attempts. Please login again.';
+      notifyListeners();
+      return false;
+    }
+
+    final expiryStr = await _storage.read(key: 'otp_${email}_expiry');
+    if (expiryStr == null) {
+      _errorMessage = 'OTP not found. Please login again.';
+      notifyListeners();
+      return false;
+    }
+    final expiry = DateTime.tryParse(expiryStr);
+    if (expiry == null || DateTime.now().isAfter(expiry)) {
+      await _storage.delete(key: 'otp_$email');
+      await _storage.delete(key: 'otp_${email}_expiry');
+      await _storage.delete(key: 'otp_${email}_attempts');
+      _errorMessage = 'OTP has expired. Please login again.';
+      notifyListeners();
+      return false;
+    }
+
     final storedOtp = await _storage.read(key: 'otp_$email');
     if (storedOtp == otp) {
       final profile = _userProfiles[email];
@@ -167,13 +218,23 @@ class AuthModel extends ChangeNotifier {
       _userEmail = email;
       _userName = profile?.name;
       await _storage.delete(key: 'otp_$email');
-      profile?.activities.insert(0, '${DateTime.now().toIso8601String()} - 2FA verified, login complete');
+      await _storage.delete(key: 'otp_${email}_expiry');
+      await _storage.delete(key: 'otp_${email}_attempts');
+      profile?.activities.insert(
+          0,
+          '${DateTime.now().toIso8601String()} - 2FA verified, login complete');
       _errorMessage = null;
       notifyListeners();
       return true;
     } else {
-      _userProfiles[email]?.activities.insert(0, '${DateTime.now().toIso8601String()} - Invalid OTP attempt');
-      _errorMessage = 'Invalid OTP';
+      await _storage.write(
+          key: 'otp_${email}_attempts',
+          value: (attempts + 1).toString());
+      _userProfiles[email]?.activities.insert(
+          0, '${DateTime.now().toIso8601String()} - Invalid OTP attempt');
+      _errorMessage =
+      'Invalid OTP. ${4 - attempts} attempt(s) remaining.';
+      notifyListeners();
       return false;
     }
   }
@@ -191,19 +252,24 @@ class AuthModel extends ChangeNotifier {
     final profile = _userProfiles[email];
     if (profile == null) return;
     profile.isBiometricEnabled = enabled;
-    profile.activities.insert(0, '${DateTime.now().toIso8601String()} - Biometric ${enabled ? 'enabled' : 'disabled'}');
+    profile.activities.insert(
+        0,
+        '${DateTime.now().toIso8601String()} - Biometric ${enabled ? 'enabled' : 'disabled'}');
   }
 
   Future<void> toggle2FA(String email, bool enabled) async {
     final profile = _userProfiles[email];
     if (profile == null) return;
     profile.is2FAEnabled = enabled;
-    profile.activities.insert(0, '${DateTime.now().toIso8601String()} - 2FA ${enabled ? 'enabled' : 'disabled'}');
+    profile.activities.insert(
+        0,
+        '${DateTime.now().toIso8601String()} - 2FA ${enabled ? 'enabled' : 'disabled'}');
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
     await _firebaseAuthService.sendPasswordResetEmail(email);
-    _userProfiles[email]?.activities.insert(0, '${DateTime.now().toIso8601String()} - Password reset requested');
+    _userProfiles[email]?.activities.insert(
+        0, '${DateTime.now().toIso8601String()} - Password reset requested');
   }
 
   UserProfile? getUserProfile(String email) {
