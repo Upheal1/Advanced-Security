@@ -1,0 +1,1003 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../constants/app_colors.dart';
+import '../../../models/user_model.dart';
+import '../services/community_repository.dart';
+import 'compose_post_screen.dart';
+
+class FeedTab extends StatefulWidget {
+  const FeedTab({super.key});
+
+  static Future<void> openCompose(BuildContext context) async {
+    final repo = context.read<CommunityRepository>();
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (ctx) => MultiProvider(
+          providers: [
+            Provider.value(value: repo),
+            ChangeNotifierProvider<UserModel>.value(value: ctx.read<UserModel>()),
+          ],
+          child: const ComposePostScreen(),
+        ),
+      ),
+    );
+    if (created == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Posted to the community', style: GoogleFonts.inter()),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.purple,
+        ),
+      );
+    }
+  }
+
+  @override
+  State<FeedTab> createState() => _FeedTabState();
+}
+
+class _FeedTabState extends State<FeedTab> {
+  late final CommunityRepository _repo;
+  RealtimeChannel? _feedChannel;
+
+  final ScrollController _scrollController = ScrollController();
+
+  bool _loading = true;
+  bool _misconfigured = false;
+  bool _isGuest = false;
+  String? _error;
+  bool _hasNewPosts = false;
+  List<Map<String, dynamic>> _posts = [];
+  FeedCursor? _nextCursor;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _repo = context.read<CommunityRepository>();
+    _scrollController.addListener(_onScroll);
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    if (!_repo.isConfigured) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _misconfigured = true;
+      });
+      return;
+    }
+
+    try {
+      await _repo.ensureSession(displayName: context.read<UserModel>().username);
+    } catch (_) {
+      // Session setup failed (e.g. anonymous auth disabled); continue as guest.
+    }
+    if (!mounted) return;
+    _isGuest = _repo.currentUserId == null;
+    await _loadFeed();
+    await _listenForFeedUpdates();
+  }
+
+  void _onScroll() {
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 300 && !_loadingMore && _hasMore) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadFeed() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _hasNewPosts = false;
+      _nextCursor = null;
+      _hasMore = true;
+    });
+
+    try {
+      final page = await _repo.fetchPostsFeedPage();
+      if (!mounted) return;
+      setState(() {
+        _posts = page.posts;
+        _nextCursor = page.nextCursor;
+        _hasMore = page.nextCursor != null;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('[FeedTab] _loadFeed error: $e');
+
+      final msg = e.toString().toLowerCase();
+      final isAuthOrRls = msg.contains('42501') ||
+          msg.contains('permission denied') ||
+          msg.contains('row-level security') ||
+          msg.contains('jwt') ||
+          msg.contains('not authenticated');
+
+      setState(() {
+        _posts = [];
+        _nextCursor = null;
+        _hasMore = false;
+        _error = isAuthOrRls ? null : e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (!mounted || _loadingMore || !_hasMore || _nextCursor == null) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _repo.fetchPostsFeedPage(after: _nextCursor);
+      if (!mounted) return;
+      setState(() {
+        _posts = [..._posts, ...page.posts];
+        _nextCursor = page.nextCursor;
+        _hasMore = page.nextCursor != null;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('[FeedTab] _loadMore error: $e');
+      setState(() => _loadingMore = false);
+    }
+  }
+
+  Future<void> _listenForFeedUpdates() async {
+    try {
+      _feedChannel = await _repo.subscribeToFeedUpdates(
+        onNewPostAvailable: () {
+          if (!mounted) return;
+          setState(() => _hasNewPosts = true);
+        },
+      );
+    } catch (e) {
+      debugPrint('[FeedTab] _listenForFeedUpdates error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    final channel = _feedChannel;
+    if (channel != null) {
+      unawaited(_repo.removeRealtimeChannel(channel));
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_misconfigured) return _MisconfiguredState();
+    if (_loading) return const _ShimmerFeed();
+    if (_error != null) return _ErrorState(onRetry: _loadFeed);
+
+    return RefreshIndicator(
+      color: AppColors.purple,
+      onRefresh: _loadFeed,
+      child: ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        children: [
+          if (_isGuest) _GuestBanner(onSignIn: () {}),
+          if (_hasNewPosts) _NewPostsBanner(onTap: _loadFeed),
+          const _SupportBanner(),
+          const SizedBox(height: 14),
+          if (_posts.isEmpty)
+            const _EmptyFeedState()
+          else
+            for (var i = 0; i < _posts.length; i++)
+              _FeedPostCard(post: _posts[i], index: i),
+          if (_loadingMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.purple,
+                  ),
+                ),
+              ),
+            ),
+          if (!_hasMore && _posts.isNotEmpty) const _CaughtUpFooter(),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shimmer loading skeleton ──────────────────────────────────────────────────
+
+class _ShimmerFeed extends StatelessWidget {
+  const _ShimmerFeed();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? const Color(0xFF232636) : const Color(0xFFEEEFF4);
+    final highlight = isDark ? const Color(0xFF2C3050) : const Color(0xFFF8F9FF);
+
+    return Shimmer.fromColors(
+      baseColor: base,
+      highlightColor: highlight,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        itemCount: 4,
+        itemBuilder: (_, __) => _SkeletonCard(),
+      ),
+    );
+  }
+}
+
+class _SkeletonCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final c = isDark ? const Color(0xFF2C3050) : Colors.white;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: c,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _SkeletonBox(width: 46, height: 46, radius: 23, color: c),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SkeletonBox(
+                        width: 140, height: 13, radius: 6, color: c),
+                    const SizedBox(height: 6),
+                    _SkeletonBox(
+                        width: 90, height: 11, radius: 6, color: c),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _SkeletonBox(width: double.infinity, height: 13, radius: 6, color: c),
+          const SizedBox(height: 8),
+          _SkeletonBox(width: double.infinity, height: 13, radius: 6, color: c),
+          const SizedBox(height: 8),
+          _SkeletonBox(width: 180, height: 13, radius: 6, color: c),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _SkeletonBox(width: 64, height: 32, radius: 99, color: c),
+              const SizedBox(width: 8),
+              _SkeletonBox(width: 64, height: 32, radius: 99, color: c),
+              const SizedBox(width: 8),
+              _SkeletonBox(width: 64, height: 32, radius: 99, color: c),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonBox extends StatelessWidget {
+  const _SkeletonBox({
+    required this.width,
+    required this.height,
+    required this.radius,
+    required this.color,
+  });
+  final double width;
+  final double height;
+  final double radius;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: width == double.infinity ? null : width,
+      height: height,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF323650) : const Color(0xFFE4E6EE),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+// ── Feed post card (inline, uses Map data from Supabase) ─────────────────────
+
+class _FeedPostCard extends StatelessWidget {
+  const _FeedPostCard({required this.post, required this.index});
+
+  final Map<String, dynamic> post;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final profile = post['profiles'] as Map<String, dynamic>?;
+    final name = profile?['display_name'] as String? ?? 'User';
+    final avatarUrl = profile?['avatar_url'] as String?;
+    final badge = profile?['badge'] as String?;
+    final level = (profile?['level'] as int?) ?? 1;
+    final body = post['content'] as String? ?? '';
+    final tags = (post['tags'] as List<dynamic>?)?.cast<String>() ?? [];
+    final imageUrls =
+        (post['image_urls'] as List<dynamic>?)?.cast<String>() ?? [];
+    final likes = post['likes_count'] as int? ?? 0;
+    final comments = post['comments_count'] as int? ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF13131F) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: isDark
+              ? Border.all(color: Colors.white.withValues(alpha: 0.06))
+              : Border.all(color: const Color(0xFFE9EBF0)),
+          boxShadow: isDark
+              ? []
+              : [
+                  BoxShadow(
+                    color: AppColors.purple.withValues(alpha: 0.06),
+                    blurRadius: 24,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Author row ─────────────────────────────────────────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _SmallAvatar(name: name, avatarUrl: avatarUrl),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF111827),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (badge != null && badge.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [
+                                  AppColors.purple.withValues(alpha: 0.13),
+                                  AppColors.teal.withValues(alpha: 0.10),
+                                ]),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                    color: AppColors.purple.withValues(alpha: 0.22)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(LucideIcons.sparkles,
+                                      size: 10, color: AppColors.purple),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'Lv $level',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.purple,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              badge,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: scheme.onSurface.withOpacity(0.55),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // ── Tags ───────────────────────────────────────────────────────
+            if (tags.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: tags
+                    .map((t) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.purple.withValues(alpha: 0.09),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '#$t',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.purple,
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+            // ── Body ───────────────────────────────────────────────────────
+            const SizedBox(height: 12),
+            Text(
+              body,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                height: 1.55,
+                color: scheme.onSurface.withOpacity(0.88),
+              ),
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // ── Image ──────────────────────────────────────────────────────
+            if (imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Image.network(
+                    imageUrls.first,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : Container(
+                            color: isDark
+                                ? const Color(0xFF1E1E2E)
+                                : const Color(0xFFF0F1F5),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.purple,
+                                value: progress.expectedTotalBytes != null
+                                    ? progress.cumulativeBytesLoaded /
+                                        progress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            ),
+                          ),
+                    errorBuilder: (_, __, ___) => Container(
+                      color: scheme.surfaceContainerHighest,
+                      child: Center(
+                        child: Icon(LucideIcons.imageOff,
+                            color: scheme.outline, size: 28),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            // ── Actions ────────────────────────────────────────────────────
+            const SizedBox(height: 14),
+            Divider(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : const Color(0xFFF0F1F5),
+              height: 1,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _InlineAction(
+                  icon: LucideIcons.heart,
+                  label: '$likes',
+                  activeColor: AppColors.red,
+                ),
+                const SizedBox(width: 8),
+                _InlineAction(
+                  icon: LucideIcons.messageCircle,
+                  label: '$comments',
+                  activeColor: AppColors.teal,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    )
+        .animate()
+        .fadeIn(duration: 300.ms, delay: Duration(milliseconds: 40 * index))
+        .slideY(begin: 0.08, end: 0, duration: 300.ms, curve: Curves.easeOut,
+            delay: Duration(milliseconds: 40 * index));
+  }
+}
+
+class _SmallAvatar extends StatelessWidget {
+  const _SmallAvatar({required this.name, this.avatarUrl});
+  final String name;
+  final String? avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [AppColors.purple, AppColors.teal],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.all(2.5),
+      child: ClipOval(
+        child: avatarUrl != null
+            ? Image.network(
+                avatarUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _AvatarFallback(name: name),
+              )
+            : _AvatarFallback(name: name),
+      ),
+    );
+  }
+}
+
+class _AvatarFallback extends StatelessWidget {
+  const _AvatarFallback({required this.name});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.purple.withValues(alpha: 0.13),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            color: AppColors.purple,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineAction extends StatelessWidget {
+  const _InlineAction(
+      {required this.icon, required this.label, required this.activeColor});
+  final IconData icon;
+  final String label;
+  final Color activeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark
+        ? Colors.white.withValues(alpha: 0.6)
+        : AppColors.textSecondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : const Color(0xFFF4F5FA),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFE8EAF0),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: textColor),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+                fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Banners ───────────────────────────────────────────────────────────────────
+
+class _GuestBanner extends StatelessWidget {
+  const _GuestBanner({required this.onSignIn});
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.purple.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.purple.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.userX,
+              size: 20, color: AppColors.purple),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Viewing as guest — sign in to post or interact.',
+              style: GoogleFonts.inter(
+                color: AppColors.purple,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NewPostsBanner extends StatelessWidget {
+  const _NewPostsBanner({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.purple.withValues(alpha: 0.12),
+              AppColors.teal.withValues(alpha: 0.08),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.purple.withValues(alpha: 0.22)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.arrowUp, size: 16, color: AppColors.purple),
+            const SizedBox(width: 8),
+            Text(
+              'New posts — tap to refresh',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AppColors.purple,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.3, end: 0);
+  }
+}
+
+class _SupportBanner extends StatelessWidget {
+  const _SupportBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  AppColors.purple.withValues(alpha: 0.20),
+                  AppColors.teal.withValues(alpha: 0.12),
+                ]
+              : [
+                  AppColors.purple.withValues(alpha: 0.07),
+                  AppColors.teal.withValues(alpha: 0.05),
+                ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: AppColors.purple.withValues(alpha: isDark ? 0.18 : 0.12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.purple, AppColors.teal],
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text('🌱', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your words matter here',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isDark ? Colors.white : const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Be supportive • Be kind • Be real',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: isDark
+                        ? Colors.white60
+                        : const Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Empty / error / footer states ─────────────────────────────────────────────
+
+class _EmptyFeedState extends StatelessWidget {
+  const _EmptyFeedState();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(top: 56),
+      child: Column(
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.purple.withValues(alpha: 0.12),
+                  AppColors.teal.withValues(alpha: 0.08),
+                ],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Text('🌿', style: TextStyle(fontSize: 36)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Be the first gentle voice here',
+            style: GoogleFonts.inter(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : const Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Share a thought, a win, or a question.\nYour community is listening.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              height: 1.6,
+              color: isDark ? Colors.white54 : const Color(0xFF6B7280),
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0);
+  }
+}
+
+class _CaughtUpFooter extends StatelessWidget {
+  const _CaughtUpFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 40,
+            height: 1,
+            color: AppColors.purple.withValues(alpha: 0.22),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            "You're all caught up ✨",
+            style: GoogleFonts.inter(
+              color: AppColors.purple,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 40,
+            height: 1,
+            color: AppColors.purple.withValues(alpha: 0.22),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: scheme.error.withOpacity(0.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(LucideIcons.wifiOff, size: 32, color: scheme.error),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Could not load feed',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Check your connection and try again.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                height: 1.5,
+                color: scheme.onSurface.withOpacity(0.65),
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: onRetry,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 28, vertical: 13),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.purple, AppColors.teal],
+                  ),
+                  borderRadius: BorderRadius.circular(50),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.purple.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  'Retry',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MisconfiguredState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.cloudOff, size: 48, color: scheme.outline),
+            const SizedBox(height: 16),
+            Text(
+              'Supabase URL/key missing for this build.\n\n'
+              '1) Stop the app and run again with **Full Restart** (defines load at compile time).\n'
+              '2) Use Run config **UpHeal + Supabase community** or **frontend-main** (parent folder).\n'
+              '3) Keep keys in **frontend-main/.vscode/supabase.keys.json** (gitignored).\n'
+              '4) Or pass: flutter run --dart-define-from-file=.vscode/supabase.keys.json\n\n'
+              'See **community_supabase_env.dart**.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                height: 1.4,
+                color: scheme.onSurface.withOpacity(0.85),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
