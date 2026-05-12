@@ -25,74 +25,106 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: Consumer6<AuthModel, UserModel, AvatarProvider, StreakState,
-            MissionsModel, ChallengeService>(
-          builder: (context, authModel, userModel, avatarProvider, streakState,
-              missionsModel, challengeService, _) {
-            final tasksCompleted = missionsModel.completedCount +
-                challengeService.completedTotalCount;
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const DrawerMenuButton(iconColor: Colors.white),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () =>
-                            Navigator.of(context).pushNamed('/avatar'),
-                        icon:
-                            const Icon(LucideIcons.pencil, color: Colors.white),
-                        tooltip: 'Edit avatar',
+        child:
+            Consumer6<
+              AuthModel,
+              UserModel,
+              AvatarProvider,
+              StreakState,
+              MissionsModel,
+              ChallengeService
+            >(
+              builder:
+                  (
+                    context,
+                    authModel,
+                    userModel,
+                    avatarProvider,
+                    streakState,
+                    missionsModel,
+                    challengeService,
+                    _,
+                  ) {
+                    final tasksCompleted =
+                        missionsModel.completedCount +
+                        challengeService.completedTotalCount;
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              const DrawerMenuButton(iconColor: Colors.white),
+                              const Spacer(),
+                              IconButton(
+                                onPressed: () => Navigator.of(
+                                  context,
+                                ).pushNamed('/settings'),
+                                icon: const Icon(
+                                  LucideIcons.settings,
+                                  color: Colors.white,
+                                ),
+                                tooltip: 'Settings',
+                              ),
+                              IconButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pushNamed('/avatar'),
+                                icon: const Icon(
+                                  LucideIcons.pencil,
+                                  color: Colors.white,
+                                ),
+                                tooltip: 'Edit avatar',
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          AvatarDisplay(
+                            mood: avatarProvider.mood,
+                            avatarAssetPath: avatarProvider.selectedAvatarAsset,
+                            size: 170,
+                            onEditPressed: () =>
+                                Navigator.of(context).pushNamed('/avatar'),
+                          ),
+                          const SizedBox(height: 18),
+                          _ProfileInfoCard(
+                            username: authModel.userName ?? userModel.username,
+                            level: userModel.level,
+                            xp: userModel.xp,
+                          ),
+                          const SizedBox(height: 14),
+                          _QuickStatsRow(
+                            level: userModel.level,
+                            xp: userModel.xp,
+                            badges: userModel.badges,
+                            rank: userModel.rank,
+                            onBadgesTap: () =>
+                                Navigator.of(context).pushNamed('/badges'),
+                          ),
+                          const SizedBox(height: 14),
+                          _StreakProgressCard(
+                            streakDays: userModel.streakDays,
+                            isAtRisk: streakState.isStreakAtRisk,
+                            hoursLeft: streakState.hoursUntilStreakLoss,
+                            nextMilestoneDays:
+                                streakState.nextMilestone?.daysRequired,
+                            daysUntilNextMilestone:
+                                streakState.daysUntilNextMilestone,
+                          ),
+                          const SizedBox(height: 14),
+                          _AchievementsPreviewCard(
+                            achievements: _computeAchievementsPreview(
+                              user: userModel,
+                              tasksCompleted: tasksCompleted,
+                            ),
+                            onViewAll: () => Navigator.of(
+                              context,
+                            ).pushNamed('/achievements'),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  AvatarDisplay(
-                    mood: avatarProvider.mood,
-                    avatarAssetPath: avatarProvider.selectedAvatarAsset,
-                    size: 170,
-                    onEditPressed: () =>
-                        Navigator.of(context).pushNamed('/avatar'),
-                  ),
-                  const SizedBox(height: 18),
-                  _ProfileInfoCard(
-                    username: authModel.userName ?? userModel.username,
-                    level: userModel.level,
-                    xp: userModel.xp,
-                  ),
-                  const SizedBox(height: 14),
-                  _QuickStatsRow(
-                    level: userModel.level,
-                    xp: userModel.xp,
-                    badges: userModel.badges,
-                    rank: userModel.rank,
-                    onBadgesTap: () =>
-                        Navigator.of(context).pushNamed('/badges'),
-                  ),
-                  const SizedBox(height: 14),
-                  _StreakProgressCard(
-                    streakDays: userModel.streakDays,
-                    isAtRisk: streakState.isStreakAtRisk,
-                    hoursLeft: streakState.hoursUntilStreakLoss,
-                    nextMilestoneDays: streakState.nextMilestone?.daysRequired,
-                    daysUntilNextMilestone: streakState.daysUntilNextMilestone,
-                  ),
-                  const SizedBox(height: 14),
-                  _AchievementsPreviewCard(
-                    achievements: _computeAchievementsPreview(
-                      user: userModel,
-                      tasksCompleted: tasksCompleted,
-                    ),
-                    onViewAll: () =>
-                        Navigator.of(context).pushNamed('/achievements'),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+                    );
+                  },
+            ),
       ),
     );
   }
@@ -120,15 +152,17 @@ List<Achievement> _computeAchievementsPreview({
     }
   }
 
-  final all = Achievement.getDefaultAchievements().map((a) {
-    final p = progressFor(a);
-    final unlocked = p >= a.requirement;
-    return a.copyWith(
-      currentProgress: p,
-      isUnlocked: unlocked,
-      unlockedAt: unlocked ? (a.unlockedAt ?? DateTime.now()) : null,
-    );
-  }).toList(growable: false);
+  final all = Achievement.getDefaultAchievements()
+      .map((a) {
+        final p = progressFor(a);
+        final unlocked = p >= a.requirement;
+        return a.copyWith(
+          currentProgress: p,
+          isUnlocked: unlocked,
+          unlockedAt: unlocked ? (a.unlockedAt ?? DateTime.now()) : null,
+        );
+      })
+      .toList(growable: false);
 
   // Show a premium mix: prioritize unlocked, then highest progress.
   all.sort((a, b) {
@@ -186,15 +220,9 @@ class _ProfileInfoCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              _Pill(
-                icon: LucideIcons.trophy,
-                label: 'Level $level',
-              ),
+              _Pill(icon: LucideIcons.trophy, label: 'Level $level'),
               const SizedBox(width: 10),
-              _Pill(
-                icon: LucideIcons.zap,
-                label: '$xp XP',
-              ),
+              _Pill(icon: LucideIcons.zap, label: '$xp XP'),
             ],
           ),
         ],
@@ -399,14 +427,14 @@ class _StreakProgressCard extends StatelessWidget {
     final headline = isAtRisk
         ? 'Streak at risk'
         : streakDays == 0
-            ? 'Start your streak'
-            : 'Streak active';
+        ? 'Start your streak'
+        : 'Streak active';
 
     final sub = isAtRisk
         ? '$hoursLeft hours left to save it'
         : streakDays == 0
-            ? 'Complete one activity today'
-            : '$daysUntilNextMilestone days to next milestone';
+        ? 'Complete one activity today'
+        : '$daysUntilNextMilestone days to next milestone';
 
     return Container(
       width: double.infinity,
@@ -445,8 +473,10 @@ class _StreakProgressCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
                   color: Colors.white.withOpacity(0.06),
@@ -532,11 +562,7 @@ class _AchievementsPreviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                LucideIcons.trophy,
-                size: 18,
-                color: AppColors.purple,
-              ),
+              Icon(LucideIcons.trophy, size: 18, color: AppColors.purple),
               const SizedBox(width: 8),
               Text(
                 'Achievements',
@@ -609,8 +635,10 @@ class _AchievementsPreviewCard extends StatelessWidget {
                                 color: a.color.withOpacity(0.18),
                               ),
                               alignment: Alignment.center,
-                              child: Text(a.icon,
-                                  style: const TextStyle(fontSize: 16)),
+                              child: Text(
+                                a.icon,
+                                style: const TextStyle(fontSize: 16),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(

@@ -38,6 +38,7 @@ import 'screens/gad_phq_form_screen.dart'; // Used in optional auto-push (see in
 import 'screens/my_assessment_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/notification_settings_screen.dart';
+import 'screens/settings_screen.dart';
 import 'models/journal_model.dart';
 import 'services/journal_service.dart';
 import 'services/journal_local_service.dart';
@@ -179,11 +180,7 @@ Future<void> main() async {
     // Try to show a minimal error screen
     runApp(
       MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Text('Error: $e'),
-          ),
-        ),
+        home: Scaffold(body: Center(child: Text('Error: $e'))),
       ),
     );
   }
@@ -192,7 +189,8 @@ Future<void> main() async {
 /// Handle notification taps and navigate to appropriate screen
 void _handleNotificationTap(NotificationPayload payload) {
   debugPrint(
-      'Notification tapped: ${payload.type}, appName: ${payload.appName}');
+    'Notification tapped: ${payload.type}, appName: ${payload.appName}',
+  );
 
   final context = navigatorKey.currentContext;
   if (context == null) {
@@ -207,15 +205,15 @@ void _handleNotificationTap(NotificationPayload payload) {
     case NotificationType.warning:
     case NotificationType.limit:
     case NotificationType.summary:
-    // Navigate to analytics screen (index 4 in RootNav)
+      // Navigate to analytics screen (index 4 in RootNav)
       navModel.setIndex(4);
       break;
     case NotificationType.achievement:
-    // Navigate to profile screen (index 12 in RootNav)
+      // Navigate to profile screen (index 12 in RootNav)
       navModel.setIndex(12);
       break;
     case NotificationType.info:
-    // No navigation needed
+      // No navigation needed
       break;
   }
 }
@@ -245,10 +243,12 @@ class _SystemUIWrapperState extends State<_SystemUIWrapper> {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor:
-        isDark ? const Color(0xFF111318) : const Color(0xFFF4F7F5),
-        systemNavigationBarIconBrightness:
-        isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: isDark
+            ? const Color(0xFF111318)
+            : const Color(0xFFF4F7F5),
+        systemNavigationBarIconBrightness: isDark
+            ? Brightness.light
+            : Brightness.dark,
       ),
     );
   }
@@ -281,14 +281,16 @@ class UpHealApp extends StatelessWidget {
 
         ChangeNotifierProvider(create: (_) => AvatarProvider()),
         ChangeNotifierProvider(create: (_) => RewardOrchestrator()),
-        ChangeNotifierProvider(create: (_) {
-          final service = ChallengeService();
-          // Initialize challenge state asynchronously
-          service.init().catchError((e) {
-            debugPrint('ChallengeService init error: $e');
-          });
-          return service;
-        }),
+        ChangeNotifierProvider(
+          create: (_) {
+            final service = ChallengeService();
+            // Initialize challenge state asynchronously
+            service.init().catchError((e) {
+              debugPrint('ChallengeService init error: $e');
+            });
+            return service;
+          },
+        ),
         ChangeNotifierProvider(
           create: (context) {
             // Try to get username from Firebase Auth if user is already logged in
@@ -305,8 +307,14 @@ class UpHealApp extends StatelessWidget {
             );
           },
         ),
-        ChangeNotifierProxyProvider5<StreakState, ChallengeService,
-            MissionsModel, UserModel, RewardOrchestrator, BadgeProvider>(
+        ChangeNotifierProxyProvider5<
+          StreakState,
+          ChallengeService,
+          MissionsModel,
+          UserModel,
+          RewardOrchestrator,
+          BadgeProvider
+        >(
           create: (context) {
             final orchestrator = context.read<RewardOrchestrator>();
             final provider = BadgeProvider(orchestrator: orchestrator);
@@ -315,88 +323,110 @@ class UpHealApp extends StatelessWidget {
             });
             return provider;
           },
-          update: (context, streakState, challengeService, missionsModel,
-              userModel, orchestrator, badgeProvider) {
-            final provider =
-                badgeProvider ?? BadgeProvider(orchestrator: orchestrator);
-            final tasksCompleted = missionsModel.completedCount +
-                challengeService.completedTotalCount;
-            provider.updateFrom(
-              streakDays: userModel.streakDays,
-              tasksCompleted: tasksCompleted,
-              addictionFreeDays: userModel.streakDays,
-            );
-            return provider;
-          },
+          update:
+              (
+                context,
+                streakState,
+                challengeService,
+                missionsModel,
+                userModel,
+                orchestrator,
+                badgeProvider,
+              ) {
+                final provider =
+                    badgeProvider ?? BadgeProvider(orchestrator: orchestrator);
+                final tasksCompleted =
+                    missionsModel.completedCount +
+                    challengeService.completedTotalCount;
+                provider.updateFrom(
+                  streakDays: userModel.streakDays,
+                  tasksCompleted: tasksCompleted,
+                  addictionFreeDays: userModel.streakDays,
+                );
+                return provider;
+              },
         ),
         ChangeNotifierProvider(create: (_) => MissionsModel()),
         ChangeNotifierProvider(create: (_) => ParentalControlModel()),
         ChangeNotifierProvider(create: (_) => SleepModel()),
-        ChangeNotifierProvider(create: (_) {
-          final stepState = StepTrackerState();
-          // Initialize step tracker asynchronously
-          stepState.initialize().catchError((e) {
-            debugPrint('StepTrackerState initialization error: $e');
-          });
-          return stepState;
-        }),
+        ChangeNotifierProvider(
+          create: (_) {
+            final stepState = StepTrackerState();
+            // Initialize step tracker asynchronously
+            stepState.initialize().catchError((e) {
+              debugPrint('StepTrackerState initialization error: $e');
+            });
+            return stepState;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => ThemeModel()), // Theme management
         ChangeNotifierProvider(
-            create: (_) => NavigationModel()), // Top-level navigation index
+          create: (_) => NavigationModel(),
+        ), // Top-level navigation index
         // Streak State with service initialization
-        ChangeNotifierProvider(create: (_) {
-          final streakState = StreakState();
-          // Initialize streak service asynchronously
-          StreakService.initialize(streakState).catchError((e) {
-            debugPrint('StreakService initialization error: $e');
-          });
-          return streakState;
-        }),
+        ChangeNotifierProvider(
+          create: (_) {
+            final streakState = StreakState();
+            // Initialize streak service asynchronously
+            StreakService.initialize(streakState).catchError((e) {
+              debugPrint('StreakService initialization error: $e');
+            });
+            return streakState;
+          },
+        ),
         // Focus Session State with service initialization
-        ChangeNotifierProvider(create: (_) {
-          final focusSessionState = FocusSessionState();
-          // Initialize focus session service asynchronously
-          FocusSessionService.initialize(focusSessionState).catchError((e) {
-            debugPrint('FocusSessionService initialization error: $e');
-          });
-          return focusSessionState;
-        }),
-        ChangeNotifierProvider(create: (_) {
-          final screenTimeModel = ScreenTimeModel();
-          // Initialize service asynchronously to not block app startup
-          ScreenTimeService.initialize(screenTimeModel).catchError((e) {
-            debugPrint('ScreenTimeService initialization error: $e');
-          });
-          return screenTimeModel;
-        }),
+        ChangeNotifierProvider(
+          create: (_) {
+            final focusSessionState = FocusSessionState();
+            // Initialize focus session service asynchronously
+            FocusSessionService.initialize(focusSessionState).catchError((e) {
+              debugPrint('FocusSessionService initialization error: $e');
+            });
+            return focusSessionState;
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (_) {
+            final screenTimeModel = ScreenTimeModel();
+            // Initialize service asynchronously to not block app startup
+            ScreenTimeService.initialize(screenTimeModel).catchError((e) {
+              debugPrint('ScreenTimeService initialization error: $e');
+            });
+            return screenTimeModel;
+          },
+        ),
         // Journal Model with services
-        ChangeNotifierProvider(create: (_) {
-          final localService = JournalLocalService();
-          final apiService = JournalApiService();
-          final journalService = JournalService(
-            localService: localService,
-            apiService: apiService,
-          );
-          // Initialize local service asynchronously
-          localService.init().catchError((e) {
-            debugPrint('JournalLocalService initialization error: $e');
-          });
-          return JournalModel(journalService);
-        }),
+        ChangeNotifierProvider(
+          create: (_) {
+            final localService = JournalLocalService();
+            final apiService = JournalApiService();
+            final journalService = JournalService(
+              localService: localService,
+              apiService: apiService,
+            );
+            // Initialize local service asynchronously
+            localService.init().catchError((e) {
+              debugPrint('JournalLocalService initialization error: $e');
+            });
+            return JournalModel(journalService);
+          },
+        ),
         // Mood Model with services
-        ChangeNotifierProvider(create: (_) {
-          final localService = MoodLocalService();
-          final apiService = MoodApiService();
-          final moodService = MoodService(
-            localService: localService,
-            apiService: apiService,
-          );
-          // Initialize local service asynchronously
-          localService.init().catchError((e) {
-            debugPrint('MoodLocalService initialization error: $e');
-          });
-          return MoodModel(moodService);
-        }),
+        ChangeNotifierProvider(
+          create: (_) {
+            final localService = MoodLocalService();
+            final apiService = MoodApiService();
+            final moodService = MoodService(
+              localService: localService,
+              apiService: apiService,
+            );
+            // Initialize local service asynchronously
+            localService.init().catchError((e) {
+              debugPrint('MoodLocalService initialization error: $e');
+            });
+            return MoodModel(moodService);
+          },
+        ),
       ],
       child: Consumer<ThemeModel>(
         builder: (context, themeModel, child) {
@@ -404,10 +434,11 @@ class UpHealApp extends StatelessWidget {
             title: 'UpHeal',
             navigatorKey: navigatorKey,
             theme: buildTheme(Brightness.light).copyWith(textTheme: textTheme),
-            darkTheme:
-            buildTheme(Brightness.dark).copyWith(textTheme: textTheme),
+            darkTheme: buildTheme(
+              Brightness.dark,
+            ).copyWith(textTheme: textTheme),
             themeMode:
-            themeModel.themeMode, // Dynamic theme based on user choice
+                themeModel.themeMode, // Dynamic theme based on user choice
             home: const _SystemUIWrapper(child: AuthWrapper()),
             debugShowCheckedModeBanner: false,
             scaffoldMessengerKey: rootScaffoldMessengerKey,
@@ -419,7 +450,8 @@ class UpHealApp extends StatelessWidget {
               '/analytics': (context) => const AnalyticsScreen(),
               '/profile': (context) => const ProfileScreen(),
               '/notification-settings': (context) =>
-              const NotificationSettingsScreen(),
+                  const NotificationSettingsScreen(),
+              '/settings': (context) => const SettingsScreen(),
               '/block-apps': (context) => const BlockAppsScreen(),
               '/achievements': (context) {
                 final user = context.watch<UserModel>();
@@ -443,16 +475,19 @@ class UpHealApp extends StatelessWidget {
                   }
                 }
 
-                final computed = Achievement.getDefaultAchievements().map((a) {
-                  final p = progressFor(a);
-                  final unlocked = p >= a.requirement;
-                  return a.copyWith(
-                    currentProgress: p,
-                    isUnlocked: unlocked,
-                    unlockedAt:
-                    unlocked ? (a.unlockedAt ?? DateTime.now()) : null,
-                  );
-                }).toList(growable: false);
+                final computed = Achievement.getDefaultAchievements()
+                    .map((a) {
+                      final p = progressFor(a);
+                      final unlocked = p >= a.requirement;
+                      return a.copyWith(
+                        currentProgress: p,
+                        isUnlocked: unlocked,
+                        unlockedAt: unlocked
+                            ? (a.unlockedAt ?? DateTime.now())
+                            : null,
+                      );
+                    })
+                    .toList(growable: false);
 
                 return AchievementsScreen(achievements: computed);
               },
@@ -513,7 +548,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
             // Sync to SharedPreferences for faster future checks
             await prefs.setBool(userKey, true);
             debugPrint(
-                'Synced completion status from Firestore to SharedPreferences');
+              'Synced completion status from Firestore to SharedPreferences',
+            );
           }
         } catch (e) {
           debugPrint('Error checking Firestore completion status: $e');
@@ -523,11 +559,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
       // Show assessment screen if user hasn't completed it
       if (!hasCompleted && mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const GadPhqFormScreen(),
-          ),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const GadPhqFormScreen()));
       }
     });
   }
@@ -572,11 +606,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
           debugPrint('Error in AuthWrapper build: $e');
           debugPrint('Stack trace: $stackTrace');
           // Return a safe fallback widget
-          return Scaffold(
-            body: Center(
-              child: Text('Error: $e'),
-            ),
-          );
+          return Scaffold(body: Center(child: Text('Error: $e')));
         }
       },
     );
@@ -591,7 +621,7 @@ class RootNav extends StatefulWidget {
 }
 
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
-GlobalKey<ScaffoldMessengerState>();
+    GlobalKey<ScaffoldMessengerState>();
 
 class _RootNavState extends State<RootNav> {
   // Index now managed by NavigationModel provider
@@ -658,7 +688,9 @@ class _RootNavState extends State<RootNav> {
     if (call.method == 'onThreatDetected') {
       final args = Map<String, dynamic>.from(call.arguments as Map);
       final confidence = args['confidence'] as double? ?? 0.0;
-      debugPrint('⚠️ [EdgeAI] Cyberbullying/Threat detected! Confidence: $confidence');
+      debugPrint(
+        '⚠️ [EdgeAI] Cyberbullying/Threat detected! Confidence: $confidence',
+      );
 
       // إظهار تنبيه داخل التطبيق يوضح وجود خطر (يمكن ربط هذا الحدث بقاعدة البيانات لتبليغ الآباء)
       rootScaffoldMessengerKey.currentState?.showSnackBar(
@@ -668,7 +700,9 @@ class _RootNavState extends State<RootNav> {
               const Icon(Icons.warning_amber_rounded, color: Colors.white),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('⚠️ Security Alert: Harmful text detected! (Confidence: ${(confidence * 100).toStringAsFixed(1)}%)'),
+                child: Text(
+                  '⚠️ Security Alert: Harmful text detected! (Confidence: ${(confidence * 100).toStringAsFixed(1)}%)',
+                ),
               ),
             ],
           ),
@@ -684,7 +718,8 @@ class _RootNavState extends State<RootNav> {
     if (call.method != 'onBlockEvent') return;
     // #region agent log
     debugPrint(
-        'DEBUG_H4: Flutter onBlockEvent received, lifecycle=${WidgetsBinding.instance.lifecycleState}');
+      'DEBUG_H4: Flutter onBlockEvent received, lifecycle=${WidgetsBinding.instance.lifecycleState}',
+    );
     // #endregion
     final lifecycleState = WidgetsBinding.instance.lifecycleState;
     if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
@@ -760,28 +795,28 @@ class _RootNavState extends State<RootNav> {
     _isBlockedScreenVisible = true;
     Navigator.of(context)
         .push(
-      MaterialPageRoute(
-        builder: (_) => AppBlockedScreen(
-          viewModel: viewModel,
-          onTakeBreath: () {
-            rootScaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(
-                content: Text('Take a slow breath in… and out.'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          },
-          onReturnHome: () {
-            context.read<NavigationModel>().setIndex(0);
-            Navigator.of(context).pop();
-          },
-        ),
-        fullscreenDialog: true,
-      ),
-    )
+          MaterialPageRoute(
+            builder: (_) => AppBlockedScreen(
+              viewModel: viewModel,
+              onTakeBreath: () {
+                rootScaffoldMessengerKey.currentState?.showSnackBar(
+                  const SnackBar(
+                    content: Text('Take a slow breath in… and out.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              onReturnHome: () {
+                context.read<NavigationModel>().setIndex(0);
+                Navigator.of(context).pop();
+              },
+            ),
+            fullscreenDialog: true,
+          ),
+        )
         .then((_) {
-      _isBlockedScreenVisible = false;
-    });
+          _isBlockedScreenVisible = false;
+        });
   }
 
   /// ✅ دالة تشغيل الدرع الأمني الموحد (Guard + VPN)
@@ -797,16 +832,29 @@ class _RootNavState extends State<RootNav> {
 
       for (var pkg in blockedApps) {
         if (pkg.contains('facebook')) {
-          domainsToBlock.addAll(['facebook.com', 'www.facebook.com', 'm.facebook.com']);
+          domainsToBlock.addAll([
+            'facebook.com',
+            'www.facebook.com',
+            'm.facebook.com',
+          ]);
         }
         if (pkg.contains('instagram')) {
           domainsToBlock.addAll(['instagram.com', 'www.instagram.com']);
         }
         if (pkg.contains('tiktok')) {
-          domainsToBlock.addAll(['tiktok.com', 'www.tiktok.com', 'm.tiktok.com']);
+          domainsToBlock.addAll([
+            'tiktok.com',
+            'www.tiktok.com',
+            'm.tiktok.com',
+          ]);
         }
         if (pkg.contains('youtube')) {
-          domainsToBlock.addAll(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
+          domainsToBlock.addAll([
+            'youtube.com',
+            'www.youtube.com',
+            'm.youtube.com',
+            'youtu.be',
+          ]);
         }
       }
 
@@ -846,13 +894,13 @@ class _RootNavState extends State<RootNav> {
                     gradient: LinearGradient(
                       colors: Theme.of(context).brightness == Brightness.dark
                           ? [
-                        AppColors.purple.withOpacity(0.3),
-                        AppColors.purple.withOpacity(0.1),
-                      ]
+                              AppColors.purple.withOpacity(0.3),
+                              AppColors.purple.withOpacity(0.1),
+                            ]
                           : [
-                        AppColors.teal.withOpacity(0.2),
-                        AppColors.teal.withOpacity(0.05),
-                      ],
+                              AppColors.teal.withOpacity(0.2),
+                              AppColors.teal.withOpacity(0.05),
+                            ],
                     ),
                   ),
                   child: Row(
@@ -863,8 +911,8 @@ class _RootNavState extends State<RootNav> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(25),
                           gradient: LinearGradient(
-                            colors: Theme.of(context).brightness ==
-                                Brightness.dark
+                            colors:
+                                Theme.of(context).brightness == Brightness.dark
                                 ? [AppColors.purple, const Color(0xFFF97316)]
                                 : [AppColors.teal, AppColors.orange],
                           ),
@@ -885,8 +933,9 @@ class _RootNavState extends State<RootNav> {
                               style: GoogleFonts.inter(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).brightness ==
-                                    Brightness.dark
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
                                     ? Colors.white
                                     : AppColors.textPrimary,
                               ),
@@ -895,8 +944,9 @@ class _RootNavState extends State<RootNav> {
                               'Navigation Menu',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: Theme.of(context).brightness ==
-                                    Brightness.dark
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
                                     ? Colors.white70
                                     : AppColors.textPrimary.withOpacity(0.7),
                               ),
@@ -930,42 +980,38 @@ class _RootNavState extends State<RootNav> {
               SliverPadding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                        (context, i) {
-                      final item = _navItems[i];
-                      final isSelected = currentIndex == item.index;
-                      return ListTile(
-                        leading: Icon(
-                          item.icon,
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final item = _navItems[i];
+                    final isSelected = currentIndex == item.index;
+                    return ListTile(
+                      leading: Icon(
+                        item.icon,
+                        color: isSelected
+                            ? selectedColor
+                            : (Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white70
+                                  : AppColors.textPrimary),
+                        size: 24,
+                      ),
+                      title: Text(
+                        item.label,
+                        style: GoogleFonts.inter(
                           color: isSelected
                               ? selectedColor
                               : (Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white70
-                              : AppColors.textPrimary),
-                          size: 24,
+                                    ? Colors.white
+                                    : AppColors.textPrimary),
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          fontSize: 16,
                         ),
-                        title: Text(
-                          item.label,
-                          style: GoogleFonts.inter(
-                            color: isSelected
-                                ? selectedColor
-                                : (Theme.of(context).brightness ==
-                                Brightness.dark
-                                ? Colors.white
-                                : AppColors.textPrimary),
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            fontSize: 16,
-                          ),
-                        ),
-                        selected: isSelected,
-                        selectedTileColor: selectedColor.withOpacity(0.1),
-                        onTap: () => _navigateTo(context, item.index),
-                      );
-                    },
-                    childCount: _navItems.length,
-                  ),
+                      ),
+                      selected: isSelected,
+                      selectedTileColor: selectedColor.withOpacity(0.1),
+                      onTap: () => _navigateTo(context, item.index),
+                    );
+                  }, childCount: _navItems.length),
                 ),
               ),
             ],
