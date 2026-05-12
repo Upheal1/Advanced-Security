@@ -1,3 +1,6 @@
+// ignore_for_file: depend_on_referenced_packages
+import 'dart:convert';
+
 /// Journal entry model for MindQuest app.
 /// Follows the project's manual serialization pattern.
 class JournalEntry {
@@ -36,6 +39,43 @@ class JournalEntry {
         timestamp: DateTime.parse(json['timestamp'] as String),
         xpAwarded: json['xpAwarded'] as int?,
       );
+
+  /// Create a [JournalEntry] from a Supabase `journal_entries` row.
+  factory JournalEntry.fromSupabase(Map<String, dynamic> json) {
+    List<QuestionAnswer> answers = [];
+    try {
+      final raw = json['content'] as String? ?? '[]';
+      final decoded = jsonDecode(raw) as List;
+      answers = decoded
+          .map((a) => QuestionAnswer.fromJson(a as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      // Plain-text content — wrap as a single answer so UI doesn't break.
+      final text = json['content'] as String? ?? '';
+      if (text.isNotEmpty) {
+        answers = [QuestionAnswer(question: 'Entry', answer: text)];
+      }
+    }
+    final createdAt = DateTime.parse(json['created_at'] as String);
+    return JournalEntry(
+      id: json['id'] as String,
+      date: DateTime(createdAt.year, createdAt.month, createdAt.day),
+      answers: answers,
+      mood: json['mood'] as String?,
+      timestamp: createdAt,
+      xpAwarded: null,
+    );
+  }
+
+  /// Serialize to a Supabase insert payload (no `id` — let Supabase generate it).
+  Map<String, dynamic> toSupabase(String userId) => {
+        'user_id': userId,
+        'content': jsonEncode(answers.map((a) => a.toJson()).toList()),
+        'mood': mood,
+        'is_archived': false,
+        'created_at': date.toIso8601String(),
+        'updated_at': timestamp.toIso8601String(),
+      };
 }
 
 class QuestionAnswer {

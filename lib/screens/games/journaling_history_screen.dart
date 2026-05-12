@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../models/journal_entry.dart';
 import '../../models/journal_model.dart';
 import '../../constants/app_colors.dart';
 import '../journaling_details_screen.dart';
 import '../journaling_questions_screen.dart';
+
+// ─────────────────────────── Design tokens ────────────────────────────────
+
+const Color _hiTeal = Color(0xFF4ECDC4);
+const Color _hiSky  = Color(0xFF72B4D5);
+const Color _hiGray = Color(0xFF6B7280);
+const Color _hiGold = Color(0xFFD97706);
+
+// ─────────────────────────── Screen ───────────────────────────────────────
 
 class JournalingHistoryScreen extends StatefulWidget {
   const JournalingHistoryScreen({super.key});
@@ -14,352 +25,310 @@ class JournalingHistoryScreen extends StatefulWidget {
 }
 
 class _JournalingHistoryScreenState extends State<JournalingHistoryScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  bool _searchActive = false;
+  String _query = '';
+
   @override
   void initState() {
     super.initState();
-    // Load entries when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<JournalModel>(context, listen: false).loadEntries();
+      context.read<JournalModel>().loadEntries();
     });
+    _searchCtrl.addListener(() {
+      setState(() => _query = _searchCtrl.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<JournalEntry> _filtered(List<JournalEntry> entries) {
+    if (_query.isEmpty) return entries;
+    return entries.where((e) {
+      final answersText = e.answers.map((a) => '${a.question} ${a.answer}').join(' ').toLowerCase();
+      final moodText = (e.mood ?? '').toLowerCase();
+      return answersText.contains(_query) || moodText.contains(_query);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Consumer<JournalModel>(
-      builder: (context, journalModel, child) {
 
-        if (journalModel.isLoading && journalModel.entries.isEmpty) {
-          return Scaffold(
-            backgroundColor: isDark ? const Color(0xFF0F1419) : Colors.white,
-            body: Center(
-              child: CircularProgressIndicator(
-                color: isDark ? AppColors.purple : AppColors.teal,
-              ),
-            ),
-          );
-        }
-
-        if (journalModel.hasError && journalModel.entries.isEmpty) {
-          return Scaffold(
-            backgroundColor: isDark ? const Color(0xFF0F1419) : Colors.white,
-            appBar: AppBar(
-              title: Text(
-                'Journal History',
-                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-              ),
-              backgroundColor: isDark ? const Color(0xFF1B1B1B) : null,
-            ),
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading journals: ${journalModel.errorMessage}',
-                    style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      journalModel.loadEntries();
-                    },
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        final entries = journalModel.entries;
-
-        return Scaffold(
-          backgroundColor: isDark ? const Color(0xFF0F1419) : Colors.white,
-          appBar: AppBar(
-            title: Text(
-              'Journal History',
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-            ),
-            backgroundColor: isDark ? const Color(0xFF1B1B1B) : null,
-            actions: [
-              IconButton(
-                icon: Icon(
-                  Icons.refresh,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-                onPressed: () {
-                  journalModel.refresh();
-                },
-              ),
-            ],
-          ),
-          body: entries.isEmpty
-              ? _buildEmptyState(context)
-              : RefreshIndicator(
-                  onRefresh: () => journalModel.refresh(),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: entries.length,
-                    itemBuilder: (context, index) {
-                      final entry = entries[index];
-                      return _buildJournalCard(context, entry, journalModel);
-                    },
-                  ),
-                ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () async {
-              final result = await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const JournalingQuestionsScreen(),
-                ),
-              );
-              if (result == true) {
-                // Refresh if entry was saved
-                journalModel.refresh();
-              }
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('New Entry'),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.book_outlined,
-              size: 80,
-              color: isDark ? Colors.white38 : Colors.grey.shade400,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No Journal Entries Yet',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: isDark ? Colors.white : Colors.grey.shade600,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Start your journaling journey by creating your first entry',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: isDark ? Colors.white60 : Colors.grey.shade500,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const JournalingQuestionsScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Create First Entry'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isDark ? AppColors.purple : AppColors.teal,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F1419) : const Color(0xFFFAFAF8),
+      appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(LucideIcons.arrowLeft,
+            color: isDark ? Colors.white : AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
         ),
+        title: _searchActive
+            ? TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                style: GoogleFonts.inter(
+                  color: isDark ? Colors.white : AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Search entries…',
+                  hintStyle: GoogleFonts.inter(
+                    color: isDark ? Colors.white38 : _hiGray.withValues(alpha: 0.6)),
+                  border: InputBorder.none,
+                ),
+              )
+            : Text('All Entries',
+                style: GoogleFonts.inter(
+                  fontSize: 18, fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : AppColors.textPrimary)),
+        actions: [
+          IconButton(
+            icon: Icon(_searchActive ? LucideIcons.x : LucideIcons.search,
+              color: isDark ? Colors.white : AppColors.textPrimary),
+            onPressed: () {
+              setState(() {
+                _searchActive = !_searchActive;
+                if (!_searchActive) {
+                  _searchCtrl.clear();
+                  _query = '';
+                }
+              });
+            },
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildJournalCard(
-      BuildContext context, JournalEntry entry, JournalModel journalModel) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dateStr = _formatDate(entry.date);
-    final preview = entry.answers.isNotEmpty
-        ? entry.answers.first.answer
-        : 'No content';
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: isDark ? 0 : 2,
-      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isDark
-            ? BorderSide(color: Colors.white.withOpacity(0.1))
-            : BorderSide.none,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final model = context.read<JournalModel>();
+          final res = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const JournalingQuestionsScreen()),
+          );
+          if (res == true && mounted) model.refresh();
+        },
+        backgroundColor: _hiTeal,
+        foregroundColor: Colors.white,
+        elevation: 3,
+        icon: Icon(LucideIcons.pencil, size: 20),
+        label: Text('New Entry', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
       ),
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => JournalingDetailsScreen(entry: entry),
+      body: Consumer<JournalModel>(
+        builder: (context, model, _) {
+          if (model.isLoading && model.entries.isEmpty) {
+            return Center(child: CircularProgressIndicator(color: _hiTeal));
+          }
+          if (model.hasError && model.entries.isEmpty) {
+            return _ErrorState(
+              message: model.errorMessage ?? 'Unknown error',
+              onRetry: model.loadEntries,
+              isDark: isDark,
+            );
+          }
+          final entries = _filtered(model.entries);
+
+          if (entries.isEmpty) {
+            return _EmptyState(
+              isDark: isDark,
+              isFiltered: _query.isNotEmpty,
+              onNew: () async {
+                final res = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const JournalingQuestionsScreen()),
+                );
+                if (res == true && mounted) model.refresh();
+              },
+            );
+          }
+
+          return RefreshIndicator(
+            color: _hiTeal,
+            onRefresh: model.refresh,
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              itemCount: entries.length,
+              itemBuilder: (_, i) => _HistoryCard(
+                entry: entries[i],
+                isDark: isDark,
+                onDelete: () async {
+                  final ok = await model.deleteEntry(entries[i].id);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ok ? 'Entry deleted' : 'Failed to delete',
+                      style: GoogleFonts.inter()),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: ok ? Colors.grey.shade800 : Colors.red.shade400,
+                  ));
+                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => JournalingDetailsScreen(entry: entries[i])),
+                ),
+              ),
             ),
           );
         },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 16,
-                        color: isDark ? AppColors.purple : Theme.of(context).primaryColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        dateStr,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                      ),
-                    ],
-                  ),
-                  if (entry.xpAwarded != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.amber.withOpacity(0.2)
-                            : Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.amber.withOpacity(0.4)
-                              : Colors.amber.shade200,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.star,
-                            size: 14,
-                            color: Colors.amber.shade700,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${entry.xpAwarded} XP',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.amber.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────── History card ─────────────────────────────────
+
+class _HistoryCard extends StatefulWidget {
+  final JournalEntry entry;
+  final bool isDark;
+  final VoidCallback onDelete;
+  final VoidCallback onTap;
+  const _HistoryCard({
+    required this.entry,
+    required this.isDark,
+    required this.onDelete,
+    required this.onTap,
+  });
+  @override
+  State<_HistoryCard> createState() => _HistoryCardState();
+}
+
+class _HistoryCardState extends State<_HistoryCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.entry;
+    final isDark = widget.isDark;
+    final dateStr = _dateLabel(e.date);
+    final preview = e.answers.isNotEmpty ? e.answers.first.answer : '';
+    final moodEmoji = _moodEmoji(e.mood);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2535) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+          blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // ── Header row ──────────────────────────────────────
+              Row(children: [
+                Text(moodEmoji, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(dateStr,
+                      style: GoogleFonts.inter(
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.textPrimary)),
+                    if (e.mood != null)
+                      Text(e.mood!,
+                        style: GoogleFonts.inter(
+                          fontSize: 12, color: isDark ? Colors.white54 : _hiGray)),
+                  ]),
+                ),
+                if (e.xpAwarded != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _hiGold.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _hiGold.withValues(alpha: 0.35)),
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                preview,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${entry.answers.length} questions answered',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isDark ? Colors.white54 : Colors.grey.shade600,
-                        ),
+                    child: Text('+${e.xpAwarded} XP',
+                      style: GoogleFonts.inter(
+                        fontSize: 11, fontWeight: FontWeight.w700, color: _hiGold)),
                   ),
-                    IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    color: Colors.red.shade300,
-                    onPressed: () => _showDeleteDialog(context, entry, journalModel),
-                    tooltip: 'Delete entry',
-                  ),
+                const SizedBox(width: 8),
+                Icon(_expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                  size: 18,
+                  color: isDark ? Colors.white30 : _hiGray.withValues(alpha: 0.5)),
+              ]),
+
+              // ── Preview / expanded ───────────────────────────────
+              const SizedBox(height: 10),
+              Text(preview,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : AppColors.textPrimary, height: 1.55),
+                maxLines: _expanded ? null : 2,
+                overflow: _expanded ? null : TextOverflow.ellipsis),
+
+              if (_expanded) ...[
+                // Remaining Q&As
+                if (e.answers.length > 1) ...[
+                  const SizedBox(height: 14),
+                  ...e.answers.skip(1).map((qa) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(qa.question,
+                        style: GoogleFonts.inter(
+                          fontSize: 11, fontWeight: FontWeight.w600, color: _hiTeal)),
+                      const SizedBox(height: 4),
+                      Text(qa.answer,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: isDark ? Colors.white70 : _hiGray, height: 1.55)),
+                    ]),
+                  )),
                 ],
-              ),
-            ],
+                Divider(
+                  color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.06),
+                  height: 20),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  TextButton.icon(
+                    onPressed: widget.onTap,
+                    icon: const Icon(LucideIcons.externalLink, size: 14),
+                    label: Text('Full View', style: GoogleFonts.inter(fontSize: 13)),
+                    style: TextButton.styleFrom(foregroundColor: _hiSky),
+                  ),
+                  const SizedBox(width: 4),
+                  TextButton.icon(
+                    onPressed: () => _confirmDelete(context, isDark),
+                    icon: const Icon(LucideIcons.trash2, size: 14),
+                    label: Text('Delete', style: GoogleFonts.inter(fontSize: 13)),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red.shade400),
+                  ),
+                ]),
+              ],
+            ]),
           ),
         ),
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final entryDate = DateTime(date.year, date.month, date.day);
-
-    if (entryDate == today) {
-      return 'Today';
-    } else if (entryDate == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
-  }
-
-  void _showDeleteDialog(
-      BuildContext context, JournalEntry entry, JournalModel journalModel) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+  void _confirmDelete(BuildContext ctx, bool isDark) {
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Text(
-          'Delete Journal Entry?',
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-        ),
-        content: Text(
-          'Are you sure you want to delete the entry from ${_formatDate(entry.date)}? This action cannot be undone.',
-          style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
-        ),
+      context: ctx,
+      builder: (_) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E2535) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Delete entry?',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : AppColors.textPrimary)),
+        content: Text('This cannot be undone.',
+          style: GoogleFonts.inter(color: isDark ? Colors.white70 : _hiGray)),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: _hiTeal))),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: isDark ? AppColors.purple : AppColors.teal,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              final success = await journalModel.deleteEntry(entry.id);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(success ? 'Entry deleted' : 'Failed to delete entry'),
-                    backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  ),
-                );
-              }
-            },
+            onPressed: () { Navigator.pop(ctx); widget.onDelete(); },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
           ),
@@ -367,5 +336,119 @@ class _JournalingHistoryScreenState extends State<JournalingHistoryScreen> {
       ),
     );
   }
+
+  String _dateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(date.year, date.month, date.day);
+    if (d == today) return 'Today';
+    if (d == today.subtract(const Duration(days: 1))) return 'Yesterday';
+    const wdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${wdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  String _moodEmoji(String? mood) {
+    switch (mood?.toLowerCase()) {
+      case 'great':   return '😄';
+      case 'good':    return '😊';
+      case 'calm':    return '😌';
+      case 'neutral': return '😐';
+      case 'down':    return '😔';
+      case 'anxious': return '😰';
+      case 'sad':     return '😢';
+      default:        return '📝';
+    }
+  }
+}
+
+// ─────────────────────────── Empty / error states ─────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final bool isDark, isFiltered;
+  final VoidCallback onNew;
+  const _EmptyState({required this.isDark, required this.isFiltered, required this.onNew});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            width: 88, height: 88,
+            decoration: BoxDecoration(
+              color: _hiTeal.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Center(child: Text(isFiltered ? '🔍' : '📓',
+              style: const TextStyle(fontSize: 40))),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            isFiltered ? 'No matching entries' : 'No entries yet',
+            style: GoogleFonts.inter(
+              fontSize: 20, fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          Text(
+            isFiltered
+                ? 'Try different search terms'
+                : 'Your first reflection is just one tap away',
+            style: GoogleFonts.inter(
+              fontSize: 14, color: isDark ? Colors.white54 : _hiGray, height: 1.5),
+            textAlign: TextAlign.center),
+          if (!isFiltered) ...[
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: onNew,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _hiTeal, foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: Text('Write First Entry',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  final bool isDark;
+  const _ErrorState({required this.message, required this.onRetry, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Text('⚠️', style: TextStyle(fontSize: 48)),
+        const SizedBox(height: 16),
+        Text('Something went wrong',
+          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : AppColors.textPrimary)),
+        const SizedBox(height: 8),
+        Text(message,
+          style: GoogleFonts.inter(fontSize: 13, color: isDark ? Colors.white54 : _hiGray),
+          textAlign: TextAlign.center),
+        const SizedBox(height: 24),
+        ElevatedButton(
+          onPressed: onRetry,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _hiTeal, foregroundColor: Colors.white, elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text('Retry', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        ),
+      ]),
+    ),
+  );
 }
 

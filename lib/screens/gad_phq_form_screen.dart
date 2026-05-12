@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../clinical_forms.dart';
-import '../services/upheal_api.dart';
 import '../features/community/services/community_supabase.dart';
+import '../models/screen_time_model.dart';
+import '../services/screen_time_service.dart';
+import '../services/supabase_service.dart';
+import '../services/upheal_api.dart';
 import 'assessment_results_screen.dart';
 
 /// Enhanced Combined GAD‑7 + PHQ‑9 questionnaire screen with modern UI.
@@ -723,26 +726,60 @@ class _GadPhqFormScreenState extends State<GadPhqFormScreen>
       _submitting = true;
     });
 
+    // Read context-dependent values BEFORE any async gap so that the
+    // BuildContext is still valid and Provider lookups are safe.
+    final userId = SupabaseService.userId ?? 'anonymous';
+    // Read model synchronously as fallback (populated from SharedPreferences/native push).
+    final screenTimeModel = context.read<ScreenTimeModel>();
+
+    // Fetch live screen time using the same period as the analytics screen ('daily').
+    final rawUsage = await ScreenTimeService.getUltraAccurateUsageStats(period: 'daily');
+    final totalMs = rawUsage.fold<int>(0, (sum, app) => sum + ((app['usageTime'] as int? ?? 0)));
+    // usageTime is in milliseconds → convert to minutes.
+    final freshMinutes = (totalMs ~/ 1000) ~/ 60;
+    // Fall back to the cached model value if the service returned nothing.
+    final totalMinutes = freshMinutes > 0
+        ? freshMinutes
+        : screenTimeModel.totalScreenTime.inMinutes;
+    debugPrint('[ScreenTime] fresh=$freshMinutes min, model=${screenTimeModel.totalScreenTime.inMinutes} min, using=$totalMinutes min');
+
+    int socialMs = 0, productivityMs = 0;
+    for (final app in rawUsage) {
+      final cat = (app['category'] as String? ?? '').toLowerCase();
+      final ms = app['usageTime'] as int? ?? 0;
+      if (cat == 'social') socialMs += ms;
+      if (cat == 'productivity') productivityMs += ms;
+    }
+    final screenTimeData = <String, dynamic>{
+      'totalMinutes': totalMinutes.toDouble(),
+      'socialMinutes': ((socialMs ~/ 1000) ~/ 60).toDouble(),
+      'productivityMinutes': ((productivityMs ~/ 1000) ~/ 60).toDouble(),
+      'dailyUsage': rawUsage
+          .where((app) => (app['usageTime'] as int? ?? 0) > 0)
+          .map((app) => {
+                'packageName': app['packageName'] ?? '',
+                'usageTime': (((app['usageTime'] as int? ?? 0) ~/ 1000) ~/ 60),
+                'category': (app['category'] as String? ?? 'unknown').toLowerCase(),
+              })
+          .toList(),
+    };
+
     try {
       final Map<String, int> answers = Map.of(_answers);
       debugPrint('Submitting clinical answers: $answers');
 
       await _saveAssessmentLocally(answers: answers);
-      
-      try {
-        await _saveAssessmentToFirestore(context, answers: answers);
-      } catch (e) {
-        debugPrint('Firestore save failed (offline?): $e');
-      }
-
-      final userId = CommunitySupabase.clientOrNull?.auth.currentUser?.id ?? 'anonymous';
 
       Map<String, dynamic>? results;
       try {
         final api = UphealApi(baseUrl: uphealBaseUrl);
+        debugPrint('[UphealApi] Sending assess request...');
+        debugPrint('[UphealApi] answers=${answers.length}');
+        debugPrint('[UphealApi] userId=$userId');
         results = await api.assess(
           answers: answers,
           userId: userId,
+          screenTimeData: screenTimeData,
         );
         debugPrint('RAG API response received: $results');
       } catch (e) {
@@ -776,6 +813,11 @@ class _GadPhqFormScreenState extends State<GadPhqFormScreen>
       if (results != null) {
         // Save results for later viewing
         await _saveAssessmentResults(results);
+        // Persist to Supabase so AuthWrapper knows assessment is complete
+        await _saveAssessmentToSupabase(
+          answers: answers,
+          screenTimeMinutes: totalMinutes,
+        );
         
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -828,12 +870,43 @@ class _GadPhqFormScreenState extends State<GadPhqFormScreen>
     }
   }
 
+  Future<void> _saveAssessmentToSupabase({
+    required Map<String, int> answers,
+    required int screenTimeMinutes,
+    String locale = 'en',
+  }) async {
+    try {
+      final userId = SupabaseService.userId;
+      if (userId == null) return;
+
+      // Calculate sub-scores from answers
+      final gad7Score = ['gad7_q1','gad7_q2','gad7_q3','gad7_q4','gad7_q5','gad7_q6','gad7_q7']
+          .fold<int>(0, (sum, key) => sum + (answers[key] ?? 0));
+      final phq9Score = ['phq9_q1','phq9_q2','phq9_q3','phq9_q4','phq9_q5','phq9_q6','phq9_q7','phq9_q8','phq9_q9']
+          .fold<int>(0, (sum, key) => sum + (answers[key] ?? 0));
+
+      await CommunitySupabase.clientOrNull
+          ?.from('assessment_responses')
+          .insert({
+            'user_id': userId,
+            'locale': locale,
+            'form_payload': answers,
+            'gad7_score': gad7Score,
+            'phq9_score': phq9Score,
+            'screen_time_minutes': screenTimeMinutes,
+          });
+      debugPrint('Assessment response saved to Supabase (gad7=$gad7Score, phq9=$phq9Score).');
+    } catch (e, st) {
+      debugPrint('Failed to save assessment to Supabase: $e\n$st');
+    }
+  }
+
   Future<void> _saveAssessmentResults(Map<String, dynamic> results) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final user = CommunitySupabase.clientOrNull?.auth.currentUser;
-      final key = user != null 
-          ? 'assessment_results_${user.id}' 
+      final userId = SupabaseService.userId;
+      final key = userId != null
+          ? 'assessment_results_$userId'
           : 'assessment_results_anonymous';
       
       // Add timestamp to results
@@ -849,28 +922,7 @@ class _GadPhqFormScreenState extends State<GadPhqFormScreen>
     }
   }
 
-  Future<void> _saveAssessmentToFirestore(
-    BuildContext context, {
-    required Map<String, int> answers,
-  }) async {
-    try {
-      final userId = CommunitySupabase.clientOrNull?.auth.currentUser?.id;
 
-      final now = DateTime.now().toUtc();
-
-      await FirebaseFirestore.instance
-          .collection('clinical_assessments')
-          .add({
-        'answers': answers,
-        'created_at': now.toIso8601String(),
-        'user_id': userId,
-      });
-
-      debugPrint('Clinical assessment saved to Firestore.');
-    } catch (e, st) {
-      debugPrint('Failed to save assessment to Firestore: $e\n$st');
-    }
-  }
 }
 
 /// Helper class to hold question with section metadata

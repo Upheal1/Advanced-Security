@@ -9,9 +9,20 @@ const String FROM_NAME = 'UpHeal Security'; // الاسم الذي يظهر لل
 // Pepper ثابت لتشفير الباسورد
 const String PASSWORD_PEPPER = 'D9f#7kLp2@wVx8qZrT1mY!uB4sE0jHcN';
 
-// 🔗 API base URL (placeholder - replace when backend is ready)
-const String API_BASE_URL = 'https://api.example.com';
+// Supabase Configuration
+const String SUPABASE_URL = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://gcxxmjptbyvlabqzcprv.supabase.co',
+);
 
+const String SUPABASE_ANON_KEY = String.fromEnvironment(
+  'SUPABASE_ANON_KEY',
+  defaultValue: '',
+);
 
-
+// API Configuration
+const String API_BASE_URL = String.fromEnvironment(
+  'UPHEAL_API_URL',
+  defaultValue: 'https://upheal-gateway.up.railway.app',
+);
 

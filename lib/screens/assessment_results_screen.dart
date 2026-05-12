@@ -89,12 +89,14 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final anxietyProb = (widget.results['anxiety_probability'] as num).toDouble();
-    final depressionProb = (widget.results['depression_probability'] as num).toDouble();
-    final severity = widget.results['severity'] as Map<String, dynamic>;
-    final comorbidity = widget.results['comorbidity'] as bool;
-    final recommendations = widget.results['rag_recommendations'] as List<dynamic>;
-    final queryUsed = widget.results['query_used'] as String;
+    final anxietyProb = ((widget.results['anxiety_probability'] as num?) ?? 0).toDouble();
+    final depressionProb = ((widget.results['depression_probability'] as num?) ?? 0).toDouble();
+    final severity = (widget.results['severity'] as Map<String, dynamic>?) ?? {'anxiety': 'Mild', 'depression': 'Mild'};
+    // Backend sends comorbidity as the string "true" / "false"
+    final comorbidityRaw = widget.results['comorbidity'];
+    final comorbidity = comorbidityRaw == true || comorbidityRaw.toString().toLowerCase() == 'true';
+    final recommendations = (widget.results['rag_recommendations'] as List<dynamic>?) ?? [];
+    final queryUsed = (widget.results['query_used'] as String?) ?? '';
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1058,11 +1060,11 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen>
     bool isDark,
   ) {
     final isExpanded = _expandedCards.contains(index);
-    final source = rec['source'] as String;
-    final section = rec['section'] as String;
-    final content = rec['content'] as String;
-    final similarity = (rec['similarity'] as num).toDouble();
-    final pages = rec['pages'] as String;
+    final source = (rec['source'] as String?) ?? '';
+    final section = (rec['section'] as String?) ?? '';
+    final content = (rec['content'] as String?) ?? '';
+    final similarity = ((rec['similarity'] as num?) ?? 0).toDouble();
+    final pages = (rec['pages'] as String?) ?? '';
 
     Color relevanceColor;
     String relevanceLabel;
@@ -1454,9 +1456,9 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen>
   }
 
   void _shareResults() async {
-    final anxietyProb = (widget.results['anxiety_probability'] as num).toDouble();
-    final depressionProb = (widget.results['depression_probability'] as num).toDouble();
-    final severity = widget.results['severity'] as Map<String, dynamic>;
+    final anxietyProb = ((widget.results['anxiety_probability'] as num?) ?? 0).toDouble();
+    final depressionProb = ((widget.results['depression_probability'] as num?) ?? 0).toDouble();
+    final severity = (widget.results['severity'] as Map<String, dynamic>?) ?? {'anxiety': 'Mild', 'depression': 'Mild'};
     
     final shareText = '''
 UpHeal Assessment Summary

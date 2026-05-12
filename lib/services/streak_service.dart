@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/streak_model.dart';
 import 'notification_service.dart';
 import '../features/community/services/community_supabase.dart';
@@ -99,26 +97,23 @@ class StreakService {
     }
   }
 
-  /// Load streak data from Firestore if a user is logged in.
+  /// Load streak data from Supabase if a user is logged in.
   static Future<Map<String, dynamic>?> _loadRemoteData() async {
     final user = CommunitySupabase.clientOrNull?.auth.currentUser;
     if (user == null) return null;
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.id)
-          .collection('streak')
-          .doc('current')
-          .get();
+      final row = await CommunitySupabase.clientOrNull!
+          .from('streak_data')
+          .select()
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (!doc.exists) return null;
-      final data = doc.data();
-      if (data == null) return null;
-      debugPrint('Loaded streak data from Firebase');
-      return data;
+      if (row == null) return null;
+      debugPrint('Loaded streak data from Supabase');
+      return row;
     } catch (e) {
-      debugPrint('Error loading streak from Firebase: $e');
+      debugPrint('Error loading streak from Supabase: $e');
       return null;
     }
   }
@@ -280,16 +275,13 @@ class StreakService {
     if (user == null) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.id)
-          .collection('streak')
-          .doc('current')
-          .set(data, SetOptions(merge: true));
+      await CommunitySupabase.clientOrNull!
+          .from('streak_data')
+          .upsert({...data, 'user_id': user.id});
 
-      debugPrint('Streak data saved to Firebase');
+      debugPrint('Streak data saved to Supabase');
     } catch (e) {
-      debugPrint('Error saving streak to Firebase: $e');
+      debugPrint('Error saving streak to Supabase: $e');
     }
   }
   

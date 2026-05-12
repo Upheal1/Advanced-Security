@@ -5,10 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'firebase_options.dart';
 import 'config/community_supabase_env.dart';
 import 'constants/app_colors.dart';
 import 'models/mission_model.dart';
@@ -39,12 +36,11 @@ import 'screens/block_apps_screen.dart';
 import 'screens/app_blocked_screen.dart';
 import 'screens/gad_phq_form_screen.dart'; // Used in optional auto-push (see initState)
 import 'screens/my_assessment_screen.dart';
+import 'screens/roadmap_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/notification_settings_screen.dart';
 import 'models/journal_model.dart';
 import 'services/journal_service.dart';
-import 'services/journal_local_service.dart';
-import 'services/journal_api_service.dart';
 import 'models/mood_model.dart';
 import 'services/mood_service.dart';
 import 'services/mood_local_service.dart';
@@ -144,32 +140,22 @@ Future<void> main() async {
     debugPrint('AppBlockingService initialization error: $e');
   }
 
+  // Initialize screen time notifications
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    debugPrint('Firebase initialized successfully');
-
-    // Initialize screen time notifications
-    try {
-      await ScreenTimeNotificationService.initialize();
-      debugPrint('Screen time notifications initialized successfully');
-    } catch (e) {
-      debugPrint('Screen time notifications initialization error: $e');
-    }
-
-    // Initialize notification service for app usage limits
-    try {
-      await NotificationService.initialize();
-      // Set up notification tap handler
-      NotificationService.onNotificationTap = _handleNotificationTap;
-      debugPrint('NotificationService initialized successfully');
-    } catch (e) {
-      debugPrint('NotificationService initialization error: $e');
-    }
+    await ScreenTimeNotificationService.initialize();
+    debugPrint('Screen time notifications initialized successfully');
   } catch (e) {
-    debugPrint('Firebase initialization error: $e');
-    // Continue even if Firebase fails to initialize
+    debugPrint('Screen time notifications initialization error: $e');
+  }
+
+  // Initialize notification service for app usage limits
+  try {
+    await NotificationService.initialize();
+    // Set up notification tap handler
+    NotificationService.onNotificationTap = _handleNotificationTap;
+    debugPrint('NotificationService initialized successfully');
+  } catch (e) {
+    debugPrint('NotificationService initialization error: $e');
   }
 
   await CommunitySupabaseEnv.tryLoadLocalKeysFile();
@@ -378,19 +364,9 @@ class UpHealApp extends StatelessWidget {
           });
           return screenTimeModel;
         }),
-        // Journal Model with services
+        // Journal Model — writes/reads directly to Supabase
         ChangeNotifierProvider(create: (_) {
-          final localService = JournalLocalService();
-          final apiService = JournalApiService();
-          final journalService = JournalService(
-            localService: localService,
-            apiService: apiService,
-          );
-          // Initialize local service asynchronously
-          localService.init().catchError((e) {
-            debugPrint('JournalLocalService initialization error: $e');
-          });
-          return JournalModel(journalService);
+          return JournalModel(JournalService());
         }),
         // Mood Model with services
         ChangeNotifierProvider(create: (_) {
@@ -510,22 +486,24 @@ class _AuthWrapperState extends State<AuthWrapper> {
       final userKey = 'has_completed_assessment_${user.id}';
       bool hasCompleted = prefs.getBool(userKey) ?? false;
 
-      // Also check Firestore as fallback (in case SharedPreferences was cleared)
+      // Also check Supabase as fallback (in case SharedPreferences was cleared)
       if (!hasCompleted) {
         try {
-          final doc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.id)
-              .get();
-          if (doc.exists && doc.data()?['has_completed_assessment'] == true) {
+          final row = await CommunitySupabase.clientOrNull
+              ?.from('assessment_responses')
+              .select('id')
+              .eq('user_id', user.id)
+              .limit(1)
+              .maybeSingle();
+          if (row != null) {
             hasCompleted = true;
             // Sync to SharedPreferences for faster future checks
             await prefs.setBool(userKey, true);
             debugPrint(
-                'Synced completion status from Firestore to SharedPreferences');
+                'Synced completion status from Supabase to SharedPreferences');
           }
         } catch (e) {
-          debugPrint('Error checking Firestore completion status: $e');
+          debugPrint('Error checking Supabase completion status: $e');
           // Continue with SharedPreferences value
         }
       }
@@ -614,6 +592,7 @@ class _RootNavState extends State<RootNav> {
     const SleepTrackerScreen(),
     const StepTrackerScreen(),
     const MyAssessmentScreen(),
+    const RoadmapScreen(),
     const JournalScreen(),
     const MoodTrackerScreen(),
     const ParentalControlScreen(),
@@ -630,11 +609,12 @@ class _RootNavState extends State<RootNav> {
     _NavItem(icon: LucideIcons.moon, label: 'Sleep Tracker', index: 5),
     _NavItem(icon: LucideIcons.footprints, label: 'Step Tracker', index: 6),
     _NavItem(icon: LucideIcons.brain, label: 'My Results', index: 7),
-    _NavItem(icon: LucideIcons.bookOpen, label: 'Journaling', index: 8),
-    _NavItem(icon: LucideIcons.smile, label: 'Mood Tracker', index: 9),
-    _NavItem(icon: LucideIcons.shield, label: 'Parental', index: 10),
-    _NavItem(icon: LucideIcons.ban, label: 'Block Apps', index: 11),
-    _NavItem(icon: LucideIcons.user, label: 'Profile', index: 12),
+    _NavItem(icon: LucideIcons.map, label: 'Roadmap', index: 8),
+    _NavItem(icon: LucideIcons.bookOpen, label: 'Journaling', index: 9),
+    _NavItem(icon: LucideIcons.smile, label: 'Mood Tracker', index: 10),
+    _NavItem(icon: LucideIcons.shield, label: 'Parental', index: 11),
+    _NavItem(icon: LucideIcons.ban, label: 'Block Apps', index: 12),
+    _NavItem(icon: LucideIcons.user, label: 'Profile', index: 13),
   ];
 
   void _navigateTo(BuildContext context, int index) {

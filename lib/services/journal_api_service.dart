@@ -1,28 +1,44 @@
 import 'package:dio/dio.dart';
 import '../models/journal_entry.dart';
 import '../utils/api_exceptions.dart';
-import '../config.dart';
+import 'supabase_service.dart';
+import 'upheal_api.dart' show uphealBaseUrl;
 
 /// Service for journal API operations.
 /// Handles all backend communication for journal entries.
 class JournalApiService {
   final Dio _dio;
 
-  JournalApiService({Dio? dio})
-      : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: API_BASE_URL,
-                connectTimeout: const Duration(seconds: 30),
-                receiveTimeout: const Duration(seconds: 30),
-              ),
-            );
+  JournalApiService({Dio? dio}) : _dio = dio ?? _buildDio();
+
+  static Dio _buildDio() {
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: uphealBaseUrl,
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+    // Attach Supabase JWT on every request
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final token = await SupabaseService.idToken;
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
+      ),
+    );
+    return dio;
+  }
 
   /// Save a journal entry to the backend
   Future<void> saveEntry(JournalEntry entry) async {
     try {
       await _dio.post(
-        '/journal/entries',
+        '/api/journal',
         data: entry.toJson(),
       );
     } on DioException catch (e) {
@@ -33,68 +49,55 @@ class JournalApiService {
   /// Get all journal entries from backend
   Future<List<JournalEntry>> getEntries() async {
     try {
-      final response = await _dio.get('/journal/entries');
-      if (response.data is List) {
-        return (response.data as List)
-            .map((e) => JournalEntry.fromJson(e as Map<String, dynamic>))
-            .toList();
+      final response = await _dio.get('/api/journal');
+      // Backend returns JournalListResponse: {"entries": [...], "total_count": ..., ...}
+      final data = response.data;
+      List<dynamic>? list;
+      if (data is Map<String, dynamic>) {
+        list = data['entries'] as List<dynamic>?;
+      } else if (data is List) {
+        list = data;
       }
-      return [];
+      return (list ?? [])
+          .map((e) => JournalEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
     } on DioException catch (e) {
       _handleDioError(e);
       return [];
     }
   }
 
-  /// Get a journal entry by date
+  /// Get a journal entry by date (fetches all and filters client-side —
+  /// backend has no date query param)
   Future<JournalEntry?> getEntryByDate(DateTime date) async {
     try {
-      final response = await _dio.get(
-        '/journal/entries',
-        queryParameters: {
-          'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
+      final entries = await getEntries();
+      final dateOnly = DateTime(date.year, date.month, date.day);
+      return entries.firstWhere(
+        (e) {
+          final d = DateTime(e.date.year, e.date.month, e.date.day);
+          return d == dateOnly;
         },
+        orElse: () => throw NotFoundException('No entry for $dateOnly'),
       );
-      if (response.data != null) {
-        return JournalEntry.fromJson(response.data as Map<String, dynamic>);
-      }
-      return null;
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
-        return null; // Not found is not an error
-      }
-      _handleDioError(e);
+    } on NotFoundException {
       return null;
     }
   }
 
-  /// Get entries within a date range
+  /// Get entries within a date range (filters client-side)
   Future<List<JournalEntry>> getEntriesInRange(
       DateTime start, DateTime end) async {
-    try {
-      final response = await _dio.get(
-        '/journal/entries',
-        queryParameters: {
-          'start': start.toIso8601String(),
-          'end': end.toIso8601String(),
-        },
-      );
-      if (response.data is List) {
-        return (response.data as List)
-            .map((e) => JournalEntry.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-      return [];
-    } on DioException catch (e) {
-      _handleDioError(e);
-      return [];
-    }
+    final entries = await getEntries();
+    return entries.where((e) {
+      return !e.date.isBefore(start) && !e.date.isAfter(end);
+    }).toList();
   }
 
   /// Delete a journal entry
   Future<void> deleteEntry(String id) async {
     try {
-      await _dio.delete('/journal/entries/$id');
+      await _dio.delete('/api/journal/$id');
     } on DioException catch (e) {
       _handleDioError(e);
     }

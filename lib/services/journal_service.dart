@@ -1,111 +1,94 @@
+import 'package:flutter/foundation.dart';
 import '../models/journal_entry.dart';
-import '../utils/api_exceptions.dart';
-import 'journal_api_service.dart';
-import 'journal_local_service.dart';
+import '../features/community/services/community_supabase.dart';
+import 'supabase_service.dart';
 
-/// Offline-first journal service combining local Hive storage with optional API sync.
+/// Journal service — reads/writes directly to the Supabase `journal_entries`
+/// table. No local Hive cache, no REST backend.
 class JournalService {
-  final JournalLocalService localService;
-  final JournalApiService apiService;
+  // ── helpers ──────────────────────────────────────────────────────────────
 
-  JournalService({
-    required this.localService,
-    required this.apiService,
-  });
-
-  Future<void> saveEntry(JournalEntry entry) async {
-    // Save locally first for offline support.
-    await localService.saveEntry(entry);
-    // Best-effort sync to backend.
-    try {
-      await apiService.saveEntry(entry);
-    } catch (e) {
-      // Log and keep local; sync can retry later.
-      print('JournalService.saveEntry backend error: $e');
-    }
+  dynamic get _client {
+    final c = CommunitySupabase.clientOrNull;
+    if (c == null) throw Exception('Supabase not initialized');
+    return c;
   }
 
+  String get _userId {
+    final id = SupabaseService.userId;
+    if (id == null) throw Exception('User not authenticated');
+    return id;
+  }
+
+  // ── CRUD ─────────────────────────────────────────────────────────────────
+
   Future<List<JournalEntry>> getEntries() async {
-    // Offline-first: always load local entries first
-    final localEntries = await localService.getEntries();
-    print('JournalService.getEntries: Found ${localEntries.length} local entries');
-    
-    // Try to sync from remote in background, but don't block on it
-    try {
-      final remoteEntries = await apiService.getEntries();
-      if (remoteEntries.isNotEmpty) {
-        print('JournalService.getEntries: Found ${remoteEntries.length} remote entries, merging...');
-        // Merge: prefer local, but add any new remote entries
-        final localIds = localEntries.map((e) => e.id).toSet();
-        final newRemoteEntries = remoteEntries.where((e) => !localIds.contains(e.id)).toList();
-        if (newRemoteEntries.isNotEmpty) {
-          // Save new remote entries locally
-          for (final entry in newRemoteEntries) {
-            await localService.saveEntry(entry);
-          }
-          return [...localEntries, ...newRemoteEntries];
-        }
-      }
-    } catch (e) {
-      print('JournalService.getEntries backend error (using local only): $e');
-    }
-    return localEntries;
+    final userId = _userId;
+    debugPrint('[Journal] Fetching entries for user: $userId');
+    final response = await _client
+        .from('journal_entries')
+        .select()
+        .eq('user_id', userId)
+        .eq('is_archived', false)
+        .order('created_at', ascending: false);
+    final list = response as List;
+    debugPrint('[Journal] Fetched ${list.length} entries');
+    return list
+        .map((e) => JournalEntry.fromSupabase(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveEntry(JournalEntry entry) async {
+    final userId = _userId;
+    debugPrint('[Journal] Saving entry for user: $userId');
+    await _client
+        .from('journal_entries')
+        .insert(entry.toSupabase(userId));
+    debugPrint('[Journal] Entry saved successfully');
   }
 
   Future<JournalEntry?> getEntryByDate(DateTime date) async {
-    final local = await localService.getEntryByDate(date);
-    if (local != null) return local;
-    try {
-      return await apiService.getEntryByDate(date);
-    } catch (e) {
-      print('JournalService.getEntryByDate backend error: $e');
-      return local;
-    }
+    final userId = _userId;
+    final start = DateTime(date.year, date.month, date.day).toIso8601String();
+    final end =
+        DateTime(date.year, date.month, date.day, 23, 59, 59).toIso8601String();
+    final response = await _client
+        .from('journal_entries')
+        .select()
+        .eq('user_id', userId)
+        .eq('is_archived', false)
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .limit(1);
+    final list = response as List;
+    if (list.isEmpty) return null;
+    return JournalEntry.fromSupabase(list.first as Map<String, dynamic>);
   }
 
   Future<void> deleteEntry(String id) async {
-    await localService.deleteEntry(id);
-    try {
-      await apiService.deleteEntry(id);
-    } catch (e) {
-      print('JournalService.deleteEntry backend error: $e');
-    }
+    debugPrint('[Journal] Deleting entry $id');
+    await _client.from('journal_entries').delete().eq('id', id);
   }
 
   Future<List<JournalEntry>> getEntriesInRange(
-    DateTime start,
-    DateTime end,
-  ) async {
-    final local = await localService.getEntriesInRange(start, end);
-    try {
-      final remote = await apiService.getEntriesInRange(start, end);
-      if (remote.isNotEmpty) return remote;
-    } catch (e) {
-      print('JournalService.getEntriesInRange backend error: $e');
-    }
-    return local;
+      DateTime start, DateTime end) async {
+    final userId = _userId;
+    final response = await _client
+        .from('journal_entries')
+        .select()
+        .eq('user_id', userId)
+        .eq('is_archived', false)
+        .gte('created_at', start.toIso8601String())
+        .lte('created_at', end.toIso8601String())
+        .order('created_at', ascending: false);
+    return (response as List)
+        .map((e) => JournalEntry.fromSupabase(e as Map<String, dynamic>))
+        .toList();
   }
 
-  /// Attempt to sync any locally stored entries to the backend.
-  Future<void> syncPendingEntries() async {
-    try {
-      final entries = await localService.getEntries();
-      for (final entry in entries) {
-        await apiService.saveEntry(entry);
-      }
-    } on ApiException catch (e) {
-      print('JournalService.syncPendingEntries api error: $e');
-      rethrow;
-    } catch (e) {
-      print('JournalService.syncPendingEntries error: $e');
-      rethrow;
-    }
-  }
+  /// No-op — Supabase is always in sync.
+  Future<void> syncPendingEntries() async {}
 
-  /// Placeholder for pending sync tracking.
-  int getPendingSyncCount() {
-    // In a full implementation, track unsynced entries separately.
-    return 0;
-  }
+  int getPendingSyncCount() => 0;
 }
 

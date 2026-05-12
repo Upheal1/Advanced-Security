@@ -394,5 +394,14 @@ class ScreenTimeModel extends ChangeNotifier {
   void _clearError() {
     _error = null;
   }
+
+  // ── Test helpers ─────────────────────────────────────────────────────────
+  // These methods bypass persistence and are intended for unit tests only.
+  // Using them in production code will trigger a lint warning.
+  @visibleForTesting
+  void setDailyUsageForTest(List<AppUsage> usage) {
+    _dailyUsage = List.of(usage);
+    _calculateAnalytics();
+  }
 }
 

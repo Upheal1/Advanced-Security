@@ -1,8 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../models/journal_entry.dart';
 import '../models/journal_model.dart';
 import '../constants/app_colors.dart';
+
+// ─────────────────────────── Design tokens ────────────────────────────────
+
+const Color _jSage = Color(0xFF6B9E5E);
+const Color _jTeal = Color(0xFF4ECDC4);
+const Color _jGray = Color(0xFF6B7280);
+const Color _jGold = Color(0xFFD97706);
+
+// ─────────────────────────── Mood data ────────────────────────────────────
+
+class _Mood {
+  final String label;
+  final String emoji;
+  final Color color;
+  const _Mood(this.label, this.emoji, this.color);
+}
+
+const List<_Mood> _moods = [
+  _Mood('Great',   '😄', Color(0xFFFFD60A)),
+  _Mood('Good',    '😊', Color(0xFF6B9E5E)),
+  _Mood('Calm',    '😌', Color(0xFF72B4D5)),
+  _Mood('Neutral', '😐', Color(0xFF9CA3AF)),
+  _Mood('Down',    '😔', Color(0xFF9B8EC4)),
+  _Mood('Anxious', '😰', Color(0xFFFF8F6B)),
+  _Mood('Sad',     '😢', Color(0xFF7BA7BC)),
+];
+
+// ─────────────────────────── Screen ───────────────────────────────────────
 
 class JournalingQuestionsScreen extends StatefulWidget {
   const JournalingQuestionsScreen({super.key});
@@ -12,14 +42,12 @@ class JournalingQuestionsScreen extends StatefulWidget {
       _JournalingQuestionsScreenState();
 }
 
-class _JournalingQuestionsScreenState
-    extends State<JournalingQuestionsScreen> {
+class _JournalingQuestionsScreenState extends State<JournalingQuestionsScreen> {
   final List<TextEditingController> _controllers = [];
   final List<FocusNode> _focusNodes = [];
-  final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
+  String? _selectedMood;
 
-  // Default journaling questions
   final List<String> _questions = [
     'What are three things you\'re grateful for today?',
     'What was the highlight of your day?',
@@ -39,156 +67,126 @@ class _JournalingQuestionsScreenState
 
   @override
   void dispose() {
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    for (var focusNode in _focusNodes) {
-      focusNode.dispose();
-    }
+    for (final c in _controllers) { c.dispose(); }
+    for (final f in _focusNodes) { f.dispose(); }
     super.dispose();
   }
 
+  int _calculateXP() {
+    int totalChars = _controllers.fold(0, (s, c) => s + c.text.trim().length);
+    return 10 + (totalChars / 50).floor().clamp(0, 40);
+  }
+
   Future<void> _submitJournal() async {
-    if (!_formKey.currentState!.validate()) {
+    final hasContent = _controllers.any((c) => c.text.trim().length >= 10);
+    if (!hasContent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please answer at least one question (10+ characters)',
+            style: GoogleFonts.inter()),
+          backgroundColor: Colors.red.shade400,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
     try {
       final now = DateTime.now();
+      final answers = _questions.asMap().entries
+          .where((e) => _controllers[e.key].text.trim().isNotEmpty)
+          .map((e) => QuestionAnswer(
+                question: e.value,
+                answer: _controllers[e.key].text.trim(),
+              ))
+          .toList();
+
       final entry = JournalEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         date: DateTime(now.year, now.month, now.day),
-        answers: List.generate(
-          _questions.length,
-          (index) => QuestionAnswer(
-            question: _questions[index],
-            answer: _controllers[index].text.trim(),
-          ),
-        ),
-        mood: null, // Can be added later with a mood picker
+        answers: answers,
+        mood: _selectedMood,
         timestamp: now,
         xpAwarded: _calculateXP(),
       );
 
       final journalModel = Provider.of<JournalModel>(context, listen: false);
       final success = await journalModel.saveEntry(entry);
-      
-      if (!success) {
-        throw Exception(journalModel.errorMessage ?? 'Failed to save entry');
-      }
+      if (!success) throw Exception(journalModel.errorMessage ?? 'Failed to save');
 
       if (!mounted) return;
-      
-      // Show success dialog with XP
-      await _showSuccessDialog(entry.xpAwarded ?? 0);
+      await _showSuccessDialog(entry.xpAwarded ?? 10);
       if (!mounted) return;
-      Navigator.of(context).pop(true); // Return true to indicate success
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving journal: $e'),
-            backgroundColor: Colors.red,
+            content: Text('Error saving: $e', style: GoogleFonts.inter()),
+            backgroundColor: Colors.red.shade400,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
-  }
-
-  int _calculateXP() {
-    // Award XP based on answer length and completeness
-    int totalChars = 0;
-    for (var controller in _controllers) {
-      totalChars += controller.text.trim().length;
-    }
-    // Base XP: 10, plus 1 XP per 50 characters (max 50 XP)
-    return 10 + (totalChars / 50).floor().clamp(0, 40);
   }
 
   Future<void> _showSuccessDialog(int xp) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    if (!mounted) return;
-    
     return showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 32),
-            const SizedBox(width: 12),
-            Text(
-              'Journal Saved!',
-              style: TextStyle(
-                color: isDark ? Colors.white : Colors.black87,
-              ),
+      builder: (_) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E2535) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 72, height: 72,
+            decoration: BoxDecoration(color: _jSage.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: const Center(child: Text('✅', style: TextStyle(fontSize: 36))),
+          ),
+          const SizedBox(height: 16),
+          Text('Journal Saved!',
+            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          Text('Great reflection. Keep it up!',
+            style: GoogleFonts.inter(fontSize: 14, color: isDark ? Colors.white60 : _jGray),
+            textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: _jGold.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: _jGold.withValues(alpha: 0.4)),
             ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Thank you for taking time to reflect.',
-              style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.black87,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Text('⭐', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Text('+$xp XP',
+                style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: _jGold)),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _jSage, foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
               ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.amber.withOpacity(0.2)
-                    : Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.amber.withOpacity(0.4)
-                      : Colors.amber.shade200,
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.star, color: Colors.amber, size: 24),
-                  const SizedBox(width: 8),
-                  Text(
-                    '+$xp XP',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Continue',
-              style: TextStyle(
-                color: isDark ? AppColors.purple : AppColors.teal,
-              ),
+              child: Text('Continue', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
             ),
           ),
-        ],
+        ]),
       ),
     );
   }
@@ -196,186 +194,204 @@ class _JournalingQuestionsScreenState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F1419) : const Color(0xFFFAFAF8),
       appBar: AppBar(
-        title: Text(
-          'Daily Journal',
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        backgroundColor: isDark ? const Color(0xFF1B1B1B) : null,
+        backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1E1E1E)
-                    : Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: isDark
-                    ? Border.all(color: Colors.white.withOpacity(0.1))
-                    : null,
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.book,
-                    size: 48,
-                    color: isDark
-                        ? AppColors.purple
-                        : Theme.of(context).primaryColor,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Reflect on Your Day',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : null,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Take a moment to answer these questions',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: isDark ? Colors.white70 : null,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Questions
-            ...List.generate(_questions.length, (index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Question ${index + 1}',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: isDark
-                                ? AppColors.purple
-                                : Theme.of(context).primaryColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _questions[index],
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? Colors.white : null,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _controllers[index],
-                      focusNode: _focusNodes[index],
-                      maxLines: 4,
-                      style: TextStyle(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : Colors.black87,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Type your answer here...',
-                        hintStyle: TextStyle(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white38
-                              : Colors.grey.shade500,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.grey.shade50,
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white.withOpacity(0.1)
-                                : Colors.grey.shade300,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? AppColors.purple
-                                : AppColors.teal,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please provide an answer';
-                        }
-                        if (value.trim().length < 10) {
-                          return 'Please write at least 10 characters';
-                        }
-                        return null;
-                      },
-                      textInputAction: index < _questions.length - 1
-                          ? TextInputAction.next
-                          : TextInputAction.done,
-                      onFieldSubmitted: (value) {
-                        if (index < _questions.length - 1) {
-                          _focusNodes[index + 1].requestFocus();
-                        } else {
-                          _submitJournal();
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              );
-            }),
-
-            const SizedBox(height: 32),
-
-            // Submit Button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitJournal,
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: _isSubmitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text(
-                        'Save Journal Entry',
-                        style: TextStyle(fontSize: 16),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
+        leading: IconButton(
+          icon: Icon(LucideIcons.arrowLeft,
+            color: isDark ? Colors.white : AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
         ),
+        title: Column(children: [
+          Text('Today\'s Reflection',
+            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : AppColors.textPrimary)),
+          Text(_todayDate(),
+            style: GoogleFonts.inter(fontSize: 12, color: isDark ? Colors.white54 : _jGray)),
+        ]),
+        centerTitle: true,
+        actions: [
+          TextButton(
+            onPressed: _isSubmitting ? null : _submitJournal,
+            child: Text(
+              _isSubmitting ? 'Saving…' : 'Done',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: _isSubmitting ? Colors.grey : _jSage,
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+        children: [
+          // ── Mood selector ──────────────────────────────────────────
+          Text('How are you feeling?',
+            style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : AppColors.textPrimary)),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 56,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _moods.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final mood = _moods[i];
+                final selected = _selectedMood == mood.label;
+                return GestureDetector(
+                  onTap: () => setState(() =>
+                    _selectedMood = selected ? null : mood.label),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? mood.color.withValues(alpha: 0.18)
+                          : (isDark ? const Color(0xFF1E2535) : Colors.white),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: selected ? mood.color : (isDark ? Colors.white12 : Colors.black12),
+                        width: selected ? 1.5 : 1,
+                      ),
+                      boxShadow: selected ? [BoxShadow(
+                        color: mood.color.withValues(alpha: 0.3),
+                        blurRadius: 8, offset: const Offset(0, 2),
+                      )] : null,
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(mood.emoji, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 6),
+                      Text(mood.label,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                          color: selected ? mood.color
+                            : (isDark ? Colors.white70 : _jGray),
+                        )),
+                    ]),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          // ── Questions ──────────────────────────────────────────────
+          ...List.generate(_questions.length, (i) => _buildQuestion(context, i, isDark)),
+
+          const SizedBox(height: 24),
+
+          // ── Save button ────────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSubmitting ? null : _submitJournal,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _jSage,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: _jSage.withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      height: 20, width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(LucideIcons.save, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Save Reflection',
+                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
+                    ]),
+            ),
+          ),
+        ],
       ),
     );
   }
-}
 
+  Widget _buildQuestion(BuildContext context, int i, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 24, height: 24,
+            decoration: BoxDecoration(
+              color: _jTeal.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text('${i + 1}',
+                style: GoogleFonts.inter(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: _jTeal)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(_questions[i],
+              style: GoogleFonts.inter(
+                fontSize: 14, fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : AppColors.textPrimary, height: 1.4)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _controllers[i],
+          focusNode: _focusNodes[i],
+          maxLines: null,
+          minLines: 3,
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            color: isDark ? Colors.white.withValues(alpha: 0.87) : AppColors.textPrimary,
+            height: 1.6,
+          ),
+          textInputAction: i < _questions.length - 1
+              ? TextInputAction.next
+              : TextInputAction.done,
+          onSubmitted: (_) {
+            if (i < _questions.length - 1) _focusNodes[i + 1].requestFocus();
+          },
+          decoration: InputDecoration(
+            hintText: 'Write your thoughts here…',
+            hintStyle: GoogleFonts.inter(
+              fontSize: 14,
+              color: isDark ? Colors.white30 : _jGray.withValues(alpha: 0.6)),
+            filled: true,
+            fillColor: isDark ? const Color(0xFF1E2535) : Colors.white,
+            contentPadding: const EdgeInsets.all(16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.08)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: _jTeal, width: 1.5),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  String _todayDate() {
+    final now = DateTime.now();
+    const wdays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${wdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}';
+  }
+}
