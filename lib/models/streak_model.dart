@@ -226,6 +226,7 @@ class StreakState extends ChangeNotifier {
   int _totalDaysActive = 0;
   int _freezeTokens = 1;  // Start with 1 free freeze
   int _totalXpEarned = 0;
+  int _todayXpEarned = 0;
   DateTime? _lastActiveDate;
   DateTime? _streakStartDate;
   bool _isTodayCompleted = false;
@@ -243,6 +244,7 @@ class StreakState extends ChangeNotifier {
   int get totalDaysActive => _totalDaysActive;
   int get freezeTokens => _freezeTokens;
   int get totalXpEarned => _totalXpEarned;
+  int get todayXpEarned => _todayXpEarned;
   DateTime? get lastActiveDate => _lastActiveDate;
   DateTime? get streakStartDate => _streakStartDate;
   bool get isTodayCompleted => _isTodayCompleted;
@@ -349,6 +351,7 @@ class StreakState extends ChangeNotifier {
     _totalDaysActive = totalDaysActive;
     _freezeTokens = freezeTokens;
     _totalXpEarned = totalXpEarned;
+    _todayXpEarned = 0;
     _lastActiveDate = lastActiveDate;
     _streakStartDate = streakStartDate;
     _streakHistory = history;
@@ -362,11 +365,29 @@ class StreakState extends ChangeNotifier {
   /// Record an activity for today
   void recordActivity(StreakActivityType activity, {int xpEarned = 0}) {
     _todayActivities.add(activity);
-    _totalXpEarned += (xpEarned * streakMultiplier).round();
+    final gained = (xpEarned * streakMultiplier).round();
+    _totalXpEarned += gained;
+    _todayXpEarned += gained;
     
     // Check if we've met the daily requirement (at least 1 activity)
     if (_todayActivities.isNotEmpty && !_isTodayCompleted) {
       _completeTodayStreak();
+    }
+
+    // If today's day entry exists already, keep it synced for period XP totals.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final idx = _streakHistory.indexWhere((d) {
+      final dd = DateTime(d.date.year, d.date.month, d.date.day);
+      return dd.isAtSameMomentAs(today);
+    });
+    if (idx != -1) {
+      final existing = _streakHistory[idx];
+      _streakHistory[idx] = existing.copyWith(
+        activitiesCount: _todayActivities.length,
+        xpEarned: _todayXpEarned,
+        completedActivities: _todayActivities.map((a) => a.name).toList(),
+      );
     }
     
     notifyListeners();
@@ -428,7 +449,7 @@ class StreakState extends ChangeNotifier {
       date: today,
       isCompleted: true,
       activitiesCount: _todayActivities.length,
-      xpEarned: 0, // Will be calculated
+      xpEarned: _todayXpEarned,
       completedActivities: _todayActivities.map((a) => a.name).toList(),
     ));
     
@@ -492,6 +513,7 @@ class StreakState extends ChangeNotifier {
     _streakStartDate = null;
     _isTodayCompleted = false;
     _todayActivities.clear();
+    _todayXpEarned = 0;
     notifyListeners();
   }
   
@@ -499,7 +521,16 @@ class StreakState extends ChangeNotifier {
   void resetForNewDay() {
     _isTodayCompleted = false;
     _todayActivities.clear();
+    _todayXpEarned = 0;
     notifyListeners();
+  }
+
+  int getXpEarnedInLastDays(int days) {
+    if (_streakHistory.isEmpty || days <= 0) return 0;
+    final cutoff = DateTime.now().subtract(Duration(days: days));
+    return _streakHistory
+        .where((d) => d.date.isAfter(cutoff))
+        .fold<int>(0, (sum, d) => sum + d.xpEarned);
   }
   
   /// Get streak day for a specific date

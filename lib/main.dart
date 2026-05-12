@@ -26,6 +26,7 @@ import 'features/steps/ui/screens/step_tracker_screen.dart';
 import 'screens/challenges_screen.dart';
 import 'screens/community_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/your_insights_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/parental_control_screen.dart';
@@ -207,12 +208,12 @@ void _handleNotificationTap(NotificationPayload payload) {
     case NotificationType.warning:
     case NotificationType.limit:
     case NotificationType.summary:
-    // Navigate to analytics screen (index 4 in RootNav)
-      navModel.setIndex(4);
+    // Navigate to analytics screen (index 5 in RootNav)
+      navModel.setIndex(5);
       break;
     case NotificationType.achievement:
-    // Navigate to profile screen (index 12 in RootNav)
-      navModel.setIndex(12);
+    // Navigate to profile screen (index 13 in RootNav)
+      navModel.setIndex(13);
       break;
     case NotificationType.info:
     // No navigation needed
@@ -600,6 +601,7 @@ class _RootNavState extends State<RootNav> {
 
   final _screens = [
     const HomeScreen(),
+    const YourInsightsScreen(),
     const ChallengesScreen(),
     const MiniGamesScreen(),
     const CommunityScreen(),
@@ -616,18 +618,19 @@ class _RootNavState extends State<RootNav> {
 
   final List<_NavItem> _navItems = const [
     _NavItem(icon: LucideIcons.home, label: 'Home', index: 0),
-    _NavItem(icon: LucideIcons.target, label: 'Challenges', index: 1),
-    _NavItem(icon: LucideIcons.gamepad2, label: 'Mini Games', index: 2),
-    _NavItem(icon: LucideIcons.users, label: 'Community', index: 3),
-    _NavItem(icon: LucideIcons.barChart3, label: 'Analytics', index: 4),
-    _NavItem(icon: LucideIcons.moon, label: 'Sleep Tracker', index: 5),
-    _NavItem(icon: LucideIcons.footprints, label: 'Step Tracker', index: 6),
-    _NavItem(icon: LucideIcons.brain, label: 'My Results', index: 7),
-    _NavItem(icon: LucideIcons.bookOpen, label: 'Journaling', index: 8),
-    _NavItem(icon: LucideIcons.smile, label: 'Mood Tracker', index: 9),
-    _NavItem(icon: LucideIcons.shield, label: 'Parental', index: 10),
-    _NavItem(icon: LucideIcons.ban, label: 'Block Apps', index: 11),
-    _NavItem(icon: LucideIcons.user, label: 'Profile', index: 12),
+    _NavItem(icon: LucideIcons.barChart2, label: 'Insights', index: 1),
+    _NavItem(icon: LucideIcons.target, label: 'Challenges', index: 2),
+    _NavItem(icon: LucideIcons.gamepad2, label: 'Mini Games', index: 3),
+    _NavItem(icon: LucideIcons.users, label: 'Community', index: 4),
+    _NavItem(icon: LucideIcons.barChart3, label: 'Analytics', index: 5),
+    _NavItem(icon: LucideIcons.moon, label: 'Sleep Tracker', index: 6),
+    _NavItem(icon: LucideIcons.footprints, label: 'Step Tracker', index: 7),
+    _NavItem(icon: LucideIcons.brain, label: 'My Results', index: 8),
+    _NavItem(icon: LucideIcons.bookOpen, label: 'Journaling', index: 9),
+    _NavItem(icon: LucideIcons.smile, label: 'Mood Tracker', index: 10),
+    _NavItem(icon: LucideIcons.shield, label: 'Parental', index: 11),
+    _NavItem(icon: LucideIcons.ban, label: 'Block Apps', index: 12),
+    _NavItem(icon: LucideIcons.user, label: 'Profile', index: 13),
   ];
 
   void _navigateTo(BuildContext context, int index) {

@@ -6,6 +6,30 @@ class AiChatService {
     'GROQ_API_KEY',
     defaultValue: '',
   );
+
+  static bool get isConfigured => _apiKey.isNotEmpty;
+
+  /// Empathic offline replies when no API key or network failure.
+  static String localFallbackReply(String userMessage) {
+    final lower = userMessage.toLowerCase();
+    if (RegExp(r'suicid|kill myself|self[- ]harm|end my life|want to die')
+        .hasMatch(lower)) {
+      return "I'm really glad you told me. Your safety matters most. If you're in immediate danger, call your local emergency number. In the U.S. you can call or text 988 for the Suicide & Crisis Lifeline. You deserve real-time support from trained people — I'm here to listen, but they're best equipped to help right now.";
+    }
+    if (lower.contains('anxious') || lower.contains('anxiety')) {
+      return "Anxiety can feel so heavy in the body. You're not overreacting — you're human. What tends to trigger it most lately: mornings, social situations, school or work, or something else?";
+    }
+    if (lower.contains('focus') || lower.contains('phone') || lower.contains('screen')) {
+      return "Screens steal attention in tiny pulls all day — it's not a character flaw. What if we tried one small experiment: a single 25-minute focus block, phone in another room? Would you want tips to set that up?";
+    }
+    if (lower.contains('sleep') || lower.contains('tired')) {
+      return "Sleep touches everything else when it's off. Has your bedtime been shifting, or is it more that your mind won't switch off when you lie down?";
+    }
+    if (lower.contains('sad') || lower.contains('depress') || lower.contains('lonely')) {
+      return "Thank you for trusting me with that. Feeling low or alone can shrink the world. What's one person or place — even a small one — where you've felt a little safer lately?";
+    }
+    return "Thanks for opening up — I'm here with you. What feels most important to talk through a bit more right now? You can go as slow as you need.";
+  }
   static const String _endpoint =
       "https://api.groq.com/openai/v1/chat/completions";
 
@@ -48,10 +72,7 @@ Help the user feel heard, supported, and gently guided — like a trusted therap
       List<Map<String, String>> history,
       ) async {
     if (_apiKey.isEmpty) {
-      throw Exception(
-        'GROQ_API_KEY is not set. '
-            'Build with: flutter run --dart-define=GROQ_API_KEY=<your_key>',
-      );
+      throw Exception('GROQ_API_KEY is not set');
     }
 
     try {
