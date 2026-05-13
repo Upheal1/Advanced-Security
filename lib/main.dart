@@ -243,12 +243,10 @@ class _SystemUIWrapperState extends State<_SystemUIWrapper> {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: isDark
-            ? const Color(0xFF111318)
-            : const Color(0xFFF4F7F5),
-        systemNavigationBarIconBrightness: isDark
-            ? Brightness.light
-            : Brightness.dark,
+        systemNavigationBarColor:
+            isDark ? const Color(0xFF111318) : const Color(0xFFF4F7F5),
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
       ),
     );
   }
@@ -307,14 +305,8 @@ class UpHealApp extends StatelessWidget {
             );
           },
         ),
-        ChangeNotifierProxyProvider5<
-          StreakState,
-          ChallengeService,
-          MissionsModel,
-          UserModel,
-          RewardOrchestrator,
-          BadgeProvider
-        >(
+        ChangeNotifierProxyProvider5<StreakState, ChallengeService,
+            MissionsModel, UserModel, RewardOrchestrator, BadgeProvider>(
           create: (context) {
             final orchestrator = context.read<RewardOrchestrator>();
             final provider = BadgeProvider(orchestrator: orchestrator);
@@ -323,28 +315,26 @@ class UpHealApp extends StatelessWidget {
             });
             return provider;
           },
-          update:
-              (
-                context,
-                streakState,
-                challengeService,
-                missionsModel,
-                userModel,
-                orchestrator,
-                badgeProvider,
-              ) {
-                final provider =
-                    badgeProvider ?? BadgeProvider(orchestrator: orchestrator);
-                final tasksCompleted =
-                    missionsModel.completedCount +
-                    challengeService.completedTotalCount;
-                provider.updateFrom(
-                  streakDays: userModel.streakDays,
-                  tasksCompleted: tasksCompleted,
-                  addictionFreeDays: userModel.streakDays,
-                );
-                return provider;
-              },
+          update: (
+            context,
+            streakState,
+            challengeService,
+            missionsModel,
+            userModel,
+            orchestrator,
+            badgeProvider,
+          ) {
+            final provider =
+                badgeProvider ?? BadgeProvider(orchestrator: orchestrator);
+            final tasksCompleted = missionsModel.completedCount +
+                challengeService.completedTotalCount;
+            provider.updateFrom(
+              streakDays: userModel.streakDays,
+              tasksCompleted: tasksCompleted,
+              addictionFreeDays: userModel.streakDays,
+            );
+            return provider;
+          },
         ),
         ChangeNotifierProvider(create: (_) => MissionsModel()),
         ChangeNotifierProvider(create: (_) => ParentalControlModel()),
@@ -475,19 +465,16 @@ class UpHealApp extends StatelessWidget {
                   }
                 }
 
-                final computed = Achievement.getDefaultAchievements()
-                    .map((a) {
-                      final p = progressFor(a);
-                      final unlocked = p >= a.requirement;
-                      return a.copyWith(
-                        currentProgress: p,
-                        isUnlocked: unlocked,
-                        unlockedAt: unlocked
-                            ? (a.unlockedAt ?? DateTime.now())
-                            : null,
-                      );
-                    })
-                    .toList(growable: false);
+                final computed = Achievement.getDefaultAchievements().map((a) {
+                  final p = progressFor(a);
+                  final unlocked = p >= a.requirement;
+                  return a.copyWith(
+                    currentProgress: p,
+                    isUnlocked: unlocked,
+                    unlockedAt:
+                        unlocked ? (a.unlockedAt ?? DateTime.now()) : null,
+                  );
+                }).toList(growable: false);
 
                 return AchievementsScreen(achievements: computed);
               },
@@ -658,9 +645,19 @@ class _RootNavState extends State<RootNav> {
     _NavItem(icon: LucideIcons.shield, label: 'Parental', index: 10),
     _NavItem(icon: LucideIcons.ban, label: 'Block Apps', index: 11),
     _NavItem(icon: LucideIcons.user, label: 'Profile', index: 12),
+    _NavItem(
+        icon: LucideIcons.settings,
+        label: 'Settings',
+        index: -1), // -1 means open settings screen directly
   ];
 
   void _navigateTo(BuildContext context, int index) {
+    if (index == -1) {
+      // Settings - open directly via route
+      Navigator.of(context).pop(); // Close drawer first
+      Navigator.of(context).pushNamed('/settings');
+      return;
+    }
     context.read<NavigationModel>().setIndex(index);
     Navigator.of(context).pop(); // Close drawer
   }
@@ -795,28 +792,28 @@ class _RootNavState extends State<RootNav> {
     _isBlockedScreenVisible = true;
     Navigator.of(context)
         .push(
-          MaterialPageRoute(
-            builder: (_) => AppBlockedScreen(
-              viewModel: viewModel,
-              onTakeBreath: () {
-                rootScaffoldMessengerKey.currentState?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Take a slow breath in… and out.'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              onReturnHome: () {
-                context.read<NavigationModel>().setIndex(0);
-                Navigator.of(context).pop();
-              },
-            ),
-            fullscreenDialog: true,
-          ),
-        )
+      MaterialPageRoute(
+        builder: (_) => AppBlockedScreen(
+          viewModel: viewModel,
+          onTakeBreath: () {
+            rootScaffoldMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Take a slow breath in… and out.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          },
+          onReturnHome: () {
+            context.read<NavigationModel>().setIndex(0);
+            Navigator.of(context).pop();
+          },
+        ),
+        fullscreenDialog: true,
+      ),
+    )
         .then((_) {
-          _isBlockedScreenVisible = false;
-        });
+      _isBlockedScreenVisible = false;
+    });
   }
 
   /// ✅ دالة تشغيل الدرع الأمني الموحد (Guard + VPN)
@@ -911,8 +908,8 @@ class _RootNavState extends State<RootNav> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(25),
                           gradient: LinearGradient(
-                            colors:
-                                Theme.of(context).brightness == Brightness.dark
+                            colors: Theme.of(context).brightness ==
+                                    Brightness.dark
                                 ? [AppColors.purple, const Color(0xFFF97316)]
                                 : [AppColors.teal, AppColors.orange],
                           ),
@@ -933,8 +930,7 @@ class _RootNavState extends State<RootNav> {
                               style: GoogleFonts.inter(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color:
-                                    Theme.of(context).brightness ==
+                                color: Theme.of(context).brightness ==
                                         Brightness.dark
                                     ? Colors.white
                                     : AppColors.textPrimary,
@@ -944,8 +940,7 @@ class _RootNavState extends State<RootNav> {
                               'Navigation Menu',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color:
-                                    Theme.of(context).brightness ==
+                                color: Theme.of(context).brightness ==
                                         Brightness.dark
                                     ? Colors.white70
                                     : AppColors.textPrimary.withOpacity(0.7),
@@ -989,8 +984,8 @@ class _RootNavState extends State<RootNav> {
                         color: isSelected
                             ? selectedColor
                             : (Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.white70
-                                  : AppColors.textPrimary),
+                                ? Colors.white70
+                                : AppColors.textPrimary),
                         size: 24,
                       ),
                       title: Text(
@@ -999,11 +994,10 @@ class _RootNavState extends State<RootNav> {
                           color: isSelected
                               ? selectedColor
                               : (Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.white
-                                    : AppColors.textPrimary),
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
+                                  ? Colors.white
+                                  : AppColors.textPrimary),
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
                           fontSize: 16,
                         ),
                       ),
