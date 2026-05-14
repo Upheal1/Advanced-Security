@@ -103,8 +103,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final weekMind = _weekDaysWithActivity(
                 streak, StreakActivityType.meditation.name);
             final weekMood = _weekDaysWithActivity(
-                streak,
-                StreakActivityType.assessment.name,
+              streak,
+              StreakActivityType.assessment.name,
             );
 
             return SingleChildScrollView(
@@ -418,15 +418,30 @@ List<Achievement> _computeAchievements({
     }
   }
 
-  return Achievement.getDefaultAchievements().map((a) {
-    final p = progressFor(a);
-    final unlocked = p >= a.requirement;
-    return a.copyWith(
-      currentProgress: p,
-      isUnlocked: unlocked,
-      unlockedAt: unlocked ? (a.unlockedAt ?? DateTime.now()) : null,
-    );
-  }).toList(growable: false);
+
+  final all = Achievement.getDefaultAchievements()
+      .map((a) {
+        final p = progressFor(a);
+        final unlocked = p >= a.requirement;
+        return a.copyWith(
+          currentProgress: p,
+          isUnlocked: unlocked,
+          unlockedAt: unlocked ? (a.unlockedAt ?? DateTime.now()) : null,
+        );
+      })
+      .toList(growable: false);
+
+  // Show a premium mix: prioritize unlocked, then highest progress.
+  all.sort((a, b) {
+    final au = a.isUnlocked ? 1 : 0;
+    final bu = b.isUnlocked ? 1 : 0;
+    if (au != bu) return bu - au;
+    final ap = a.currentProgress ?? 0;
+    final bp = b.currentProgress ?? 0;
+    return bp.compareTo(ap);
+  });
+
+  return all;
 }
 
 class _ProfileHeaderCard extends StatelessWidget {
@@ -533,6 +548,7 @@ class _ProfileHeaderCard extends StatelessWidget {
                     color: subtle,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
               ),
             ],
@@ -779,13 +795,15 @@ class _StreakHighlightCard extends StatelessWidget {
     final headline = isAtRisk
         ? 'Streak at risk'
         : streakDays == 0
-            ? 'Start your streak'
-            : 'Streak active';
+
+        ? 'Start your streak'
+        : 'Streak active';
+
     final sub = isAtRisk
         ? '$hoursLeft hours left today to save it'
         : streakDays == 0
-            ? 'Complete one activity today'
-            : '$daysUntilNextMilestone days to next milestone';
+        ? 'Complete one activity today'
+        : '$daysUntilNextMilestone days to next milestone';
 
     return _ShadowCard(
       isDark: isDark,
@@ -812,8 +830,10 @@ class _StreakHighlightCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.08)
@@ -1253,7 +1273,8 @@ class _JourneyNumbersCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(LucideIcons.barChart2, size: 18, color: teal),
+
+              Icon(LucideIcons.trophy, size: 18, color: AppColors.purple),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1290,7 +1311,33 @@ class _JourneyNumbersCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(e.$1, size: 18, color: teal),
+                        Row(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: teal.withValues(alpha: 0.18),
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(e.$1, size: 16, color: teal),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                e.$3,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: onCard,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                         const Spacer(),
                         Text(
                           e.$2,
@@ -1299,15 +1346,6 @@ class _JourneyNumbersCard extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                             color: onCard,
                           ),
-                        ),
-                        Text(
-                          e.$3,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: subtle,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
