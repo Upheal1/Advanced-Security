@@ -727,7 +727,6 @@ class _CommunityDrawer extends StatelessWidget {
     (LucideIcons.footprints, 'Step Tracker', StepTrackerRoute()),
     (LucideIcons.brain, 'My Results', MyAssessmentRoute()),
     (LucideIcons.bookOpen, 'Journaling', JournalRoute()),
-    (LucideIcons.smile, 'Mood Tracker', MoodTrackerRoute()),
     (LucideIcons.user, 'Profile', ProfileRoute()),
   ];
 

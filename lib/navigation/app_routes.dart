@@ -270,26 +270,6 @@ class JournalRoute extends AppRouteData {
   String get location => path;
 }
 
-class MoodTrackerRoute extends AppRouteData {
-  const MoodTrackerRoute();
-
-  static const String name = 'moodTracker';
-  static const String path = '/app/mood';
-
-  @override
-  String get location => path;
-}
-
-class ParentalControlRoute extends AppRouteData {
-  const ParentalControlRoute();
-
-  static const String name = 'parentalControl';
-  static const String path = '/app/parental-control';
-
-  @override
-  String get location => path;
-}
-
 class BlockAppsRoute extends AppRouteData {
   const BlockAppsRoute();
 
@@ -374,8 +354,6 @@ const List<AppDrawerDestination> appDrawerDestinations = <AppDrawerDestination>[
   AppDrawerDestination(icon: LucideIcons.brain, label: 'My Results', route: MyAssessmentRoute()),
   AppDrawerDestination(icon: LucideIcons.map, label: 'Roadmap', route: RoadmapRoute()),
   AppDrawerDestination(icon: LucideIcons.bookOpen, label: 'Journaling', route: JournalRoute()),
-  AppDrawerDestination(icon: LucideIcons.smile, label: 'Mood Tracker', route: MoodTrackerRoute()),
-  AppDrawerDestination(icon: LucideIcons.shield, label: 'Parental', route: ParentalControlRoute()),
   AppDrawerDestination(icon: LucideIcons.ban, label: 'Block Apps', route: BlockAppsRoute()),
   AppDrawerDestination(icon: LucideIcons.settings, label: 'Settings', route: SettingsRoute()),
   AppDrawerDestination(icon: LucideIcons.user, label: 'Profile', route: ProfileRoute()),
@@ -404,9 +382,9 @@ AppRouteData routeForLegacyIndex(int index) {
     case 9:
       return const JournalRoute();
     case 10:
-      return const MoodTrackerRoute();
+      return const JournalRoute();
     case 11:
-      return const ParentalControlRoute();
+      return const BlockAppsRoute();
     case 12:
       return const BlockAppsRoute();
     case 13:

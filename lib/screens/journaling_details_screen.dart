@@ -91,6 +91,18 @@ class _JournalingQuestionsScreenState extends State<JournalingQuestionsScreen> {
       return;
     }
 
+    if (_selectedMood == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select your current mood before saving',
+            style: GoogleFonts.inter()),
+          backgroundColor: Colors.red.shade400,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {

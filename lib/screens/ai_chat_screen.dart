@@ -375,6 +375,39 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     height: 48,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(24),
+                      gradient: LinearGradient(
+                        colors: isDark
+                            ? [
+                                Colors.white.withOpacity(0.12),
+                                Colors.white.withOpacity(0.06),
+                              ]
+                            : [
+                                AppColors.textPrimary.withOpacity(0.06),
+                                AppColors.textPrimary.withOpacity(0.03),
+                              ],
+                      ),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.16)
+                            : AppColors.textPrimary.withOpacity(0.08),
+                      ),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        LucideIcons.mic,
+                        color: isDark ? Colors.white.withOpacity(0.75) : AppColors.textSecondary,
+                        size: 20,
+                      ),
+                      onPressed: null,
+                      tooltip: 'Voice input coming soon',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
                       gradient: const LinearGradient(
                         colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
                       ),

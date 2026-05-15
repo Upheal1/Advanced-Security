@@ -24,10 +24,8 @@ import '../screens/gad_phq_form_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/journal_screen.dart';
 import '../screens/mini_games_screen.dart';
-import '../screens/mood_tracker_screen.dart';
 import '../screens/my_assessment_screen.dart';
 import '../screens/notification_settings_screen.dart';
-import '../screens/parental_control_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/roadmap_screen.dart';
 import '../screens/settings_screen.dart';
@@ -205,24 +203,6 @@ class AppRouter {
                     AppRouteTransitions.buildPage<void>(
                   state: state,
                   child: const JournalScreen(),
-                ),
-              ),
-              GoRoute(
-                path: MoodTrackerRoute.path,
-                name: MoodTrackerRoute.name,
-                pageBuilder: (BuildContext context, GoRouterState state) =>
-                    AppRouteTransitions.buildPage<void>(
-                  state: state,
-                  child: const MoodTrackerScreen(),
-                ),
-              ),
-              GoRoute(
-                path: ParentalControlRoute.path,
-                name: ParentalControlRoute.name,
-                pageBuilder: (BuildContext context, GoRouterState state) =>
-                    AppRouteTransitions.buildPage<void>(
-                  state: state,
-                  child: const ParentalControlScreen(),
                 ),
               ),
               GoRoute(

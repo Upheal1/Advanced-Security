@@ -17,7 +17,7 @@ import 'supabase_service.dart';
 /// For production: always use HTTPS.
 const String uphealBaseUrl = String.fromEnvironment(
   'UPHEAL_API_URL',
-  defaultValue: 'http://192.168.1.3:8000',
+  defaultValue: 'http://192.168.68.172:8000',
 );
 
 class UphealApi {
