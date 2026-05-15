@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../constants/app_colors.dart';
-import '../main.dart';
+import '../navigation/app_navigation_keys.dart';
 
 class DrawerMenuButton extends StatelessWidget {
   final Color? iconColor;

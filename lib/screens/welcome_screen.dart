@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'login_screen.dart';
-import 'signup_screen.dart';
+import '../navigation/app_routes.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -94,11 +93,7 @@ class WelcomeScreen extends StatelessWidget {
                       ],
                     ),
                     child: ElevatedButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const LoginScreen()),
-                      ),
+                      onPressed: () => const LoginRoute().push<void>(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
@@ -125,11 +120,7 @@ class WelcomeScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 54,
                   child: OutlinedButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const SignUpScreen()),
-                    ),
+                    onPressed: () => const SignUpRoute().push<void>(context),
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(
                         color: Colors.white.withValues(alpha: 0.4),

@@ -7,7 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:upheal/widgets/drawer_menu_button.dart';
 
 import '../../../constants/app_colors.dart';
-import '../../../models/navigation_model.dart';
+import '../../../design_system/tokens/design_tokens.dart';
+import '../../../navigation/app_routes.dart';
 import '../data/community_models.dart';
 import '../services/community_repository.dart';
 import '../state/community_notifiers.dart';
@@ -66,6 +67,7 @@ class _CommunityHubShellState extends State<_CommunityHubShell>
   @override
   Widget build(BuildContext context) {
     final idx = _tab.index;
+    final AppResponsiveInfo responsive = context.responsive;
 
     return Container(
       decoration: BoxDecoration(gradient: CommunityDecor.calmBackdrop(context)),
@@ -78,16 +80,22 @@ class _CommunityHubShellState extends State<_CommunityHubShell>
             SliverToBoxAdapter(
               child: _CommunityHeader(
                 tab: _tab,
+                responsive: responsive,
                 onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
               ),
             ),
           ],
-          body: TabBarView(
-            controller: _tab,
-            children: const [
-              FeedTab(),
-              CommunityGroupsTab(),
-            ],
+          body: AppPageContainer(
+            padding: EdgeInsets.zero,
+            maxContentWidth: responsive.isTabletOrWider ? 1080 : double.infinity,
+            expand: true,
+            child: TabBarView(
+              controller: _tab,
+              children: const [
+                FeedTab(),
+                CommunityGroupsTab(),
+              ],
+            ),
           ),
         ),
         floatingActionButton: _GradientFab(
@@ -103,8 +111,13 @@ class _CommunityHubShellState extends State<_CommunityHubShell>
 // ── Compact premium header ────────────────────────────────────────────────────
 
 class _CommunityHeader extends StatelessWidget {
-  const _CommunityHeader({required this.tab, required this.onMenuTap});
+  const _CommunityHeader({
+    required this.tab,
+    required this.responsive,
+    required this.onMenuTap,
+  });
   final TabController tab;
+  final AppResponsiveInfo responsive;
   final VoidCallback onMenuTap;
 
   @override
@@ -117,63 +130,74 @@ class _CommunityHeader extends StatelessWidget {
         border: Border(
           bottom: BorderSide(
             color: isDark
-                ? Colors.white.withOpacity(0.06)
+                ? Colors.white.withValues(alpha: 0.06)
                 : const Color(0xFFE5E7EB),
           ),
         ),
       ),
       child: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
-              child: Row(
+        child: AppPageContainer(
+          padding: EdgeInsets.fromLTRB(
+            responsive.space(AppSpacing.lg),
+            responsive.space(AppSpacing.sm),
+            responsive.space(AppSpacing.lg),
+            responsive.space(AppSpacing.lg),
+          ),
+          maxContentWidth: responsive.isTabletOrWider ? 1080 : double.infinity,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   DrawerMenuButton(
                     iconColor: isDark ? Colors.white : const Color(0xFF111827),
                     onPressed: onMenuTap,
                   ),
-                  const SizedBox(width: 2),
+                  SizedBox(width: responsive.space(AppSpacing.xxs)),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Community',
-                          style: GoogleFonts.inter(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: isDark
-                                ? Colors.white
-                                : const Color(0xFF111827),
-                            letterSpacing: -0.5,
+                    child: Semantics(
+                      header: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Community',
+                            style: GoogleFonts.inter(
+                              fontSize: responsive.isTabletOrWider ? 28 : 22,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF111827),
+                              letterSpacing: -0.5,
+                            ),
                           ),
-                        ),
-                        Text(
-                          'A safe space to share & grow',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white54
-                                : const Color(0xFF6B7280),
+                          Text(
+                            'A safe space to share, reflect, and grow together',
+                            style: GoogleFonts.inter(
+                              fontSize: responsive.isTabletOrWider ? 13 : 12,
+                              color: isDark
+                                  ? Colors.white70
+                                  : const Color(0xFF4B5563),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: _SegmentedTabBar(controller: tab),
-            ),
-          ],
+              SizedBox(height: responsive.space(AppSpacing.lg)),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: responsive.isTabletOrWider ? 420 : double.infinity,
+                ),
+                child: _SegmentedTabBar(controller: tab),
+              ),
+            ],
+          ),
         ),
       ),
     ).animate().fadeIn(duration: 300.ms);
@@ -188,14 +212,17 @@ class _SegmentedTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppResponsiveInfo responsive = context.responsive;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final trackColor = isDark
-        ? Colors.white.withOpacity(0.08)
+      ? Colors.white.withValues(alpha: 0.08)
         : const Color(0xFFE9EBF2);
 
     return Container(
-      height: 42,
-      padding: const EdgeInsets.all(4),
+      height: responsive.space(44, minScale: 1, maxScale: 1.12),
+      padding: EdgeInsets.all(
+        responsive.space(4, minScale: 1, maxScale: 1.08),
+      ),
       decoration: BoxDecoration(
         color: trackColor,
         borderRadius: BorderRadius.circular(14),
@@ -207,7 +234,7 @@ class _SegmentedTabBar extends StatelessWidget {
           gradient: CommunityDecor.fabGradient,
           boxShadow: [
             BoxShadow(
-              color: CommunityDecor.lavender.withOpacity(0.35),
+              color: CommunityDecor.lavender.withValues(alpha: 0.35),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -247,45 +274,73 @@ class _GradientFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = idx == 0 ? 'Post' : 'New group';
-    final icon = idx == 0 ? LucideIcons.pencil : LucideIcons.users;
+    final String label = idx == 0 ? 'Post' : 'New group';
+    final IconData icon = idx == 0 ? LucideIcons.pencil : LucideIcons.users;
+    final String semanticLabel = idx == 0
+        ? 'Create a new community post'
+        : 'Create a new community group';
+    final AppResponsiveInfo responsive = context.responsive;
 
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        if (idx == 0) {
-          onFeedTap();
-        } else {
-          onGroupTap();
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: CommunityDecor.fabGradient,
-          borderRadius: BorderRadius.circular(50),
-          boxShadow: [
-            BoxShadow(
-              color: CommunityDecor.lavender.withOpacity(0.45),
-              blurRadius: 22,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      hint: idx == 0 ? 'Opens the post composer' : 'Opens the group creation sheet',
+      child: Tooltip(
+        message: semanticLabel,
+        excludeFromSemantics: true,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            canRequestFocus: true,
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              if (idx == 0) {
+                onFeedTap();
+              } else {
+                onGroupTap();
+              }
+            },
+            child: Ink(
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.space(
+                  AppSpacing.xl,
+                  minScale: 1,
+                  maxScale: 1.15,
+                ),
+                vertical: responsive.space(
+                  AppSpacing.md,
+                  minScale: 1,
+                  maxScale: 1.1,
+                ),
+              ),
+              decoration: BoxDecoration(
+                gradient: CommunityDecor.fabGradient,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: CommunityDecor.lavender.withValues(alpha: 0.3),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, color: Colors.white, size: 18),
+                  SizedBox(width: responsive.space(AppSpacing.sm)),
+                  Text(
+                    label,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     )
@@ -523,9 +578,7 @@ class _CommunityDrawer extends StatelessWidget {
                         isDark: isDark,
                         onTap: () {
                           Navigator.of(context).pop();
-                          context
-                              .read<NavigationModel>()
-                              .setIndex(item.$3);
+                          item.$3.go(context);
                         },
                       ).animate().fadeIn(
                             delay: Duration(milliseconds: 240 + _appNavItems.indexOf(item) * 20),
@@ -665,17 +718,17 @@ class _CommunityDrawer extends StatelessWidget {
     );
   }
 
-  static const _appNavItems = [
-    (LucideIcons.home, 'Home', 0),
-    (LucideIcons.target, 'Challenges', 1),
-    (LucideIcons.gamepad2, 'Mini Games', 2),
-    (LucideIcons.barChart3, 'Analytics', 4),
-    (LucideIcons.moon, 'Sleep Tracker', 5),
-    (LucideIcons.footprints, 'Step Tracker', 6),
-    (LucideIcons.brain, 'My Results', 7),
-    (LucideIcons.bookOpen, 'Journaling', 8),
-    (LucideIcons.smile, 'Mood Tracker', 9),
-    (LucideIcons.user, 'Profile', 12),
+  static const List<(IconData, String, AppRouteData)> _appNavItems = <(IconData, String, AppRouteData)>[
+    (LucideIcons.home, 'Home', HomeRoute()),
+    (LucideIcons.target, 'Challenges', ChallengesRoute()),
+    (LucideIcons.gamepad2, 'Mini Games', MiniGamesRoute()),
+    (LucideIcons.barChart3, 'Analytics', AnalyticsRoute()),
+    (LucideIcons.moon, 'Sleep Tracker', SleepTrackerRoute()),
+    (LucideIcons.footprints, 'Step Tracker', StepTrackerRoute()),
+    (LucideIcons.brain, 'My Results', MyAssessmentRoute()),
+    (LucideIcons.bookOpen, 'Journaling', JournalRoute()),
+    (LucideIcons.smile, 'Mood Tracker', MoodTrackerRoute()),
+    (LucideIcons.user, 'Profile', ProfileRoute()),
   ];
 
   static const _guidelines = [

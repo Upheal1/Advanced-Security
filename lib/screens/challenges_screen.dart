@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
+import '../navigation/app_routes.dart';
 import '../models/challenge_model.dart';
 import '../services/challenge_service.dart';
 import '../widgets/drawer_menu_button.dart';
@@ -131,7 +132,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                         totalXpAvailable: totalXpAvailable,
                       ),
                       onAvatarTap: () =>
-                          Navigator.of(context).pushNamed('/avatar'),
+                          const AvatarRoute().push<void>(context),
                     ),
                     const SizedBox(height: 12),
                     ProgressCard(
@@ -597,7 +598,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                         totalXpAvailable: totalXpAvailable,
                       ),
                       onAvatarTap: () =>
-                          Navigator.of(context).pushNamed('/avatar'),
+                          const AvatarRoute().push<void>(context),
                     ),
                     const SizedBox(height: 12),
                     ProgressCard(
@@ -1059,7 +1060,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                         totalXpAvailable: totalXpAvailable,
                       ),
                       onAvatarTap: () =>
-                          Navigator.of(context).pushNamed('/avatar'),
+                          const AvatarRoute().push<void>(context),
                     ),
                     const SizedBox(height: 12),
                     ProgressCard(

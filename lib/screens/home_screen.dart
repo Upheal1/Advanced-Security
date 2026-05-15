@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,31 +7,23 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../models/mission_model.dart';
 import '../models/user_model.dart';
-import '../models/focus_session_model.dart';
 import '../models/streak_model.dart';
 import '../constants/app_colors.dart';
-import '../services/streak_service.dart';
-import '../services/reward_orchestrator.dart' as rewards;
 import '../gamification/xp_config.dart';
-import '../widgets/rewards/xp_burst_overlay.dart';
-import '../widgets/rewards/level_up_overlay.dart';
-import '../widgets/rewards/streak_milestone_overlay.dart';
-import '../widgets/rewards/badge_unlock_overlay.dart';
 import '../widgets/rewards/urge_breathing_widget.dart';
 import '../services/comeback_reward_service.dart';
-import 'focus_blocking_screen.dart';
-import 'focus_session_screen.dart';
+import 'journal_screen.dart';
 import 'notification_settings_screen.dart';
-import 'profile_screen.dart';
-import 'streak_screen.dart';
+import 'roadmap_screen.dart';
 import 'ai_chat_screen.dart';
+import 'insights_screen.dart';
 import '../widgets/drawer_menu_button.dart';
-import '../widgets/mission_card.dart';
 import '../widgets/traveler_viewer.dart';
+import '../features/community/ui/community_hub_screen.dart';
 
 // Helper class to hold selected data for minimal rebuilds
 class _HomeScreenData {
-  final List missions;
+  final List<Mission> missions;
   final UserModel user;
 
   _HomeScreenData({required this.missions, required this.user});
@@ -93,15 +86,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _navigateToProfile() {
-    // Navigate to profile page directly
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const ProfileScreen(),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // Use Selector to minimize rebuilds - only rebuild when missions or user data actually changes
@@ -113,8 +97,6 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, data, child) {
         final missions = data.missions;
         final user = data.user;
-        final completedMissions = missions.where((m) => m.completed).length;
-        final totalMissions = missions.length;
 
         return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -208,102 +190,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         : const SizedBox.shrink(),
                   ),
                   // 3D Traveler (GLB via o3d / model-viewer)
-                  _buildTravelerSection(context),
+                  _buildTravelerSection(context, user),
                   const SizedBox(height: 20),
 
-                  // Stats Section
-                  _buildStatsSection(user),
-                  const SizedBox(height: 20),
-
-                  // Level Progress
-                  _buildSectionCard(
-                    title: 'Level Progress',
-                    icon: LucideIcons.sparkles,
-                    child: _buildLevelProgressBody(user),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Daily Missions Section
-                  _buildSectionCard(
-                    title: 'Daily Missions',
-                    icon: LucideIcons.target,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$completedMissions of $totalMissions completed',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color:
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.white70
-                                    : AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (missions.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              'No missions yet. you\'re all caught up!',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? Colors.white70
-                                    : AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          )
-                        else
-                          ...missions.map(
-                            (m) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: MissionCard(mission: m),
-                            ),
-                          )
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Focus & Blocking Section
-                  _buildSectionCard(
-                    title: 'Focus & Blocking',
-                    icon: LucideIcons.shield,
-                    child: Column(
-                      children: [
-                        // Quick Focus Session Button with active indicator
-                        Consumer<FocusSessionState>(
-                          builder: (context, focusState, child) {
-                            return _buildFocusSessionButton(focusState);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _buildFeatureButton(
-                          icon: LucideIcons.shield,
-                          title: 'Smart Blocking',
-                          subtitle: 'Block apps & adult content automatically',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) =>
-                                    const FocusBlockingScreen()),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // AI Coach Section
-                  _buildAICoachCard(),
-                  const SizedBox(height: 20),
-
-                  // Claim XP Button
-                  _buildClaimXPButton(user),
+                  _buildHomeJourneyPanel(context, user, missions),
                 ],
               ),
             ),
@@ -314,84 +204,770 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Hero 3D viewer — centered Traveler model with theme-matched backdrop.
-  Widget _buildTravelerSection(BuildContext context) {
+  Widget _buildTravelerSection(BuildContext context, UserModel user) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.16)
-        : AppColors.textPrimary.withValues(alpha: 0.1);
+    final borderColor = Colors.white.withValues(alpha: isDark ? 0.08 : 0.12);
+    final int currentJourneyDay = _journeyDay(user);
+    final int nextLevelXp = XpConfig.totalXpForLevel(user.level + 1);
+    final int xpToNextLevel = (nextLevelXp - user.xp).clamp(0, nextLevelXp);
+    final String rankTitle = _travelerRankTitle(user.level);
+    final double viewerHeight = MediaQuery.sizeOf(context).width >= 600 ? 340 : 248;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  Colors.white.withValues(alpha: 0.1),
-                  Colors.white.withValues(alpha: 0.04),
-                ]
-              : [
-                  Colors.white.withValues(alpha: 0.95),
-                  AppColors.purple.withValues(alpha: 0.045),
-                ],
+          colors: <Color>[
+            const Color(0xFF243047),
+            const Color(0xFF2C4151),
+          ],
         ),
         border: Border.all(color: borderColor),
-        boxShadow: [
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
-            blurRadius: 26,
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.18),
+            blurRadius: 28,
             offset: const Offset(0, 14),
-            spreadRadius: -6,
+            spreadRadius: -10,
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                LucideIcons.sparkles,
-                size: 16,
-                color: AppColors.purple.withValues(alpha: 0.85),
+            children: <Widget>[
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    'Your Traveler',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.94),
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'YOUR Traveler',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                  color: theme.colorScheme.onSurface
-                      .withValues(alpha: isDark ? 0.5 : 0.48),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDBA2D),
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: const Color(0xFFFDBA2D).withValues(alpha: 0.45),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(
+                      LucideIcons.star,
+                      size: 14,
+                      color: Color(0xFF7A4A00),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'LVL ${user.level}',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF7A4A00),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          
           const SizedBox(height: 8),
-          Text(
-            'Press & drag to rotate your companion',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              height: 1.45,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white70 : AppColors.textSecondary,
+          SizedBox(
+            height: viewerHeight,
+            child: Stack(
+              alignment: Alignment.center,
+              children: <Widget>[
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      gradient: RadialGradient(
+                        center: const Alignment(0, -0.15),
+                        radius: 0.9,
+                        colors: <Color>[
+                          Colors.white.withValues(alpha: 0.08),
+                          Colors.white.withValues(alpha: 0.015),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                TravelerViewer(
+                  height: viewerHeight,
+                  backgroundColor: Colors.transparent,
+                ),
+                Positioned(
+                  bottom: 20,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF536279).withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          LucideIcons.rotateCcw,
+                          size: 14,
+                          color: Colors.white.withValues(alpha: 0.88),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Press & drag to rotate',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 18),
-          TravelerViewer(
-            height: MediaQuery.sizeOf(context).width >= 600 ? 340 : 272,
-            backgroundColor: theme.scaffoldBackgroundColor,
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _buildTravelerMetric(
+                  icon: LucideIcons.trophy,
+                  iconColor: const Color(0xFFF3C64C),
+                  value: rankTitle,
+                  label: 'Rank',
+                ),
+              ),
+              Expanded(
+                child: _buildTravelerMetric(
+                  value: 'Day $currentJourneyDay',
+                  subvalue: 'of 90',
+                  label: '',
+                ),
+              ),
+              Expanded(
+                child: _buildTravelerMetric(
+                  icon: LucideIcons.zap,
+                  iconColor: const Color(0xFF72F0A8),
+                  value: _formatCompactNumber(user.xp),
+                  label: 'XP',
+                  valueColor: Colors.white,
+                  alignment: CrossAxisAlignment.end,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'Level ${user.level} · $rankTitle',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFE7EEFF),
+                  ),
+                ),
+              ),
+              Text(
+                '$xpToNextLevel XP to next',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.65),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 7,
+              value: user.levelProgress,
+              backgroundColor: Colors.white.withValues(alpha: 0.12),
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF52DE97)),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildTravelerMetric({
+    IconData? icon,
+    Color? iconColor,
+    required String value,
+    required String label,
+    String? subvalue,
+    Color? valueColor,
+    CrossAxisAlignment alignment = CrossAxisAlignment.start,
+  }) {
+    return Column(
+      crossAxisAlignment: alignment,
+      children: <Widget>[
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (icon != null) ...<Widget>[
+              Icon(icon, size: 13, color: iconColor ?? Colors.white),
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: Text(
+                value,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: valueColor ?? Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (subvalue != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              subvalue,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.62),
+              ),
+            ),
+          )
+        else
+          const SizedBox(height: 2),
+        if (label.isNotEmpty)
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withValues(alpha: 0.62),
+            ),
+          ),
+      ],
+    );
+  }
+
+  int _journeyDay(UserModel user) {
+    final int elapsedDays = DateTime.now().difference(user.joinDate).inDays + 1;
+    return elapsedDays.clamp(1, 90);
+  }
+
+  String _travelerRankTitle(int level) {
+    if (level >= 15) return 'Luminary';
+    if (level >= 11) return 'Pathfinder';
+    if (level >= 7) return 'Trailblazer';
+    if (level >= 4) return 'Wanderer';
+    return 'Explorer';
+  }
+
+  String _formatCompactNumber(int value) {
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
+    }
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
+    }
+    return value.toString();
+  }
+
+  Widget _buildHomeJourneyPanel(
+    BuildContext context,
+    UserModel user,
+    List<Mission> missions,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _buildTodayQuestCard(context, missions),
+        const SizedBox(height: 18),
+        _buildQuickAccessSection(context),
+        const SizedBox(height: 18),
+        _buildContinueAscentCard(context, user),
+        const SizedBox(height: 14),
+        _buildUpcomingCard(context, missions),
+      ],
+    );
+  }
+
+  Widget _buildTodayQuestCard(BuildContext context, List<Mission> missions) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final List<Mission> visibleMissions = missions.take(4).toList(growable: false);
+    final int completedCount = visibleMissions.where((mission) => mission.completed).length;
+    final double progress = visibleMissions.isEmpty
+        ? 0
+        : completedCount / visibleMissions.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Icon(
+              LucideIcons.target,
+              size: 14,
+              color: const Color(0xFF6E9ED9),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              "Today's Quest",
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF1A2A44),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '$completedCount/${visibleMissions.length} done',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.62)
+                    : const Color(0xFF8D97A7),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            minHeight: 5,
+            value: progress,
+            backgroundColor: isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : const Color(0xFFE4E8EF),
+            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF79A98A)),
+          ),
+        ),
+        const SizedBox(height: 14),
+        ...visibleMissions.map((mission) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _buildQuestTile(context, mission),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildQuestTile(BuildContext context, Mission mission) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => context.read<MissionsModel>().toggleMission(mission.id),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : mission.completed
+                  ? const Color(0xFFF1F7EE)
+                  : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFE6EAF0),
+          ),
+          boxShadow: isDark
+              ? const <BoxShadow>[]
+              : <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: mission.completed
+                    ? const Color(0xFF7BA886)
+                    : (isDark ? Colors.white.withValues(alpha: 0.14) : const Color(0xFFF0F3F7)),
+                shape: BoxShape.circle,
+              ),
+              child: mission.completed
+                  ? const Icon(Icons.check, size: 14, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    mission.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      decoration: mission.completed ? TextDecoration.lineThrough : null,
+                      color: isDark ? Colors.white : const Color(0xFF24324A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _missionDurationText(mission),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.56)
+                          : const Color(0xFF9AA3B2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '+${mission.xpReward} XP',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFEDB448),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAccessSection(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Icon(
+              LucideIcons.zap,
+              size: 14,
+              color: const Color(0xFFF0C15B),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Quick Access',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF1A2A44),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _buildQuickAccessTile(
+                context,
+                icon: LucideIcons.bookOpen,
+                label: 'Journal',
+                background: const Color(0xFFE6F0E3),
+                iconColor: const Color(0xFF7AA08B),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const JournalScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildQuickAccessTile(
+                context,
+                icon: LucideIcons.messageCircle,
+                label: 'AI Coach',
+                background: const Color(0xFFE4F0FD),
+                iconColor: const Color(0xFF75A3D9),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const AiChatScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildQuickAccessTile(
+                context,
+                icon: LucideIcons.barChart3,
+                label: 'Insights',
+                background: const Color(0xFFFBEFCF),
+                iconColor: const Color(0xFFE4BA5A),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const InsightsScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildQuickAccessTile(
+                context,
+                icon: LucideIcons.users,
+                label: 'Groups',
+                background: const Color(0xFFECE4FF),
+                iconColor: const Color(0xFF9A86E8),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const CommunityHubScreen()),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickAccessTile(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color background,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        height: 96,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Icon(icon, size: 20, color: iconColor),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF304056),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContinueAscentCard(BuildContext context, UserModel user) {
+    final int journeyDay = _journeyDay(user);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const RoadmapScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF253A4C),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                LucideIcons.map,
+                size: 20,
+                color: Color(0xFF8CC5FF),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Continue Your Ascent',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Day $journeyDay · ${math.max(90 - journeyDay, 0)} days to summit',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.68),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 18,
+              color: Colors.white.withValues(alpha: 0.8),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUpcomingCard(BuildContext context, List<Mission> missions) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Mission? nextMission = missions.where((mission) => !mission.completed).isEmpty
+        ? null
+        : missions.firstWhere((mission) => !mission.completed);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Icon(
+              LucideIcons.calendar,
+              size: 14,
+              color: const Color(0xFFA486FF),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Upcoming',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF1A2A44),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : const Color(0xFFE6EAF0),
+            ),
+            boxShadow: isDark
+                ? const <BoxShadow>[]
+                : <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1E9FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  LucideIcons.users,
+                  size: 17,
+                  color: Color(0xFF7B58C9),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      nextMission != null
+                          ? 'Next Quest: ${nextMission.title}'
+                          : 'Group Session: Anxiety Support',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF24324A),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      nextMission != null
+                          ? nextMission.description
+                          : 'Tomorrow',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.58)
+                            : const Color(0xFF97A0AF),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _missionDurationText(Mission mission) {
+    final RegExp durationPattern = RegExp(r'(\d+)\s*(min|minute|minutes|m)');
+    final String source = '${mission.title} ${mission.description}'.toLowerCase();
+    final RegExpMatch? match = durationPattern.firstMatch(source);
+    if (match != null) {
+      return '${match.group(1)} min';
+    }
+    return mission.completed ? 'Completed' : 'Tap to complete';
   }
 
   /// Shown once per visit for [Duration(seconds: 10)] — replaces the old welcome card + avatar row.
@@ -445,726 +1021,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildStatsSection(UserModel user) {
-    return Row(
-      children: [
-        Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              // Navigate to streak page
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const StreakScreen(),
-                ),
-              );
-            },
-            child: Consumer<StreakState>(
-              builder: (context, streakState, child) {
-                return _buildStatCard(
-                  icon: LucideIcons.flame,
-                  label: 'Streak',
-                  value: streakState.isLoading
-                      ? '...'
-                      : '${streakState.currentStreak}',
-                  color: AppColors.orange,
-                );
-              },
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              // Navigate to profile page (index 10) which shows badges and streak
-              _navigateToProfile();
-            },
-            child: _buildStatCard(
-              icon: LucideIcons.award,
-              label: 'Badges',
-              value: '${user.badges}',
-              color: AppColors.warning,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            icon: LucideIcons.trophy,
-            label: 'Rank',
-            value: '#${user.rank}',
-            color: const Color(0xFF7C3AED),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLevelProgressBody(UserModel user) {
-    final level = user.level;
-    final currentLevelTotalXp = XpConfig.totalXpForLevel(level);
-    final nextLevelTotalXp = XpConfig.totalXpForLevel(level + 1);
-    final levelSpanXp =
-        (nextLevelTotalXp - currentLevelTotalXp).clamp(1, 1 << 31);
-    final withinLevelXp = (user.xp - currentLevelTotalXp).clamp(0, levelSpanXp);
-    final progress = withinLevelXp / levelSpanXp;
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pct = (progress * 100).round();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LinearProgressIndicator(
-          value: progress,
-          minHeight: 10,
-          backgroundColor: isDark
-              ? Colors.white.withOpacity(0.12)
-              : AppColors.textPrimary.withOpacity(0.08),
-          valueColor: const AlwaysStoppedAnimation<Color>(AppColors.green),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '$withinLevelXp / $levelSpanXp XP',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white70 : AppColors.textSecondary,
-              ),
-            ),
-            Text(
-              '$pct%',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white70 : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: Theme.of(context).brightness == Brightness.dark
-              ? [
-                  Colors.white.withOpacity(0.1),
-                  Colors.white.withOpacity(0.05),
-                ]
-              : [
-                  AppColors.textPrimary.withOpacity(0.05),
-                  AppColors.textPrimary.withOpacity(0.02),
-                ],
-        ),
-        border: Border.all(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white.withOpacity(0.2)
-              : AppColors.textPrimary.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: color.withOpacity(0.2),
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white
-                  : AppColors.textPrimary,
-            ),
-          ),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withOpacity(0.7)
-                  : AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({
-    required String title,
-    required IconData icon,
-    required Widget child,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: Theme.of(context).brightness == Brightness.dark
-              ? [
-                  Colors.white.withOpacity(0.1),
-                  Colors.white.withOpacity(0.05),
-                ]
-              : [
-                  AppColors.textPrimary.withOpacity(0.05),
-                  AppColors.textPrimary.withOpacity(0.02),
-                ],
-        ),
-        border: Border.all(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white.withOpacity(0.2)
-              : AppColors.textPrimary.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                icon,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : AppColors.textPrimary,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : AppColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAICoachCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: Theme.of(context).brightness == Brightness.dark
-              ? [
-                  Colors.white.withOpacity(0.1),
-                  Colors.white.withOpacity(0.05),
-                ]
-              : [
-                  AppColors.textPrimary.withOpacity(0.05),
-                  AppColors.textPrimary.withOpacity(0.02),
-                ],
-        ),
-        border: Border.all(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white.withOpacity(0.2)
-              : AppColors.textPrimary.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(25),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
-              ),
-            ),
-            child: const Icon(
-              LucideIcons.bot,
-              color: Colors.white,
-              size: 25,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AI Coach',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white
-                        : AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Tip: Short sprints beat long grinds. Try a 10m focus now.',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white.withOpacity(0.7)
-                        : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AiChatScreen()),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              'Try',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFocusSessionButton(FocusSessionState focusState) {
-    final isActive = focusState.isActive || focusState.isPaused;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const FocusSessionScreen()),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isActive
-                ? [
-                    const Color(0xFF7C3AED).withOpacity(0.2),
-                    const Color(0xFF7C3AED).withOpacity(0.1),
-                  ]
-                : isDark
-                    ? [
-                        Colors.white.withOpacity(0.1),
-                        Colors.white.withOpacity(0.05),
-                      ]
-                    : [
-                        AppColors.textPrimary.withOpacity(0.05),
-                        AppColors.textPrimary.withOpacity(0.02),
-                      ],
-          ),
-          border: Border.all(
-            color: isActive
-                ? const Color(0xFF7C3AED)
-                : isDark
-                    ? Colors.white.withOpacity(0.2)
-                    : AppColors.textPrimary.withOpacity(0.1),
-            width: isActive ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isActive
-                      ? [const Color(0xFF7C3AED), const Color(0xFF9333EA)]
-                      : [const Color(0xFF7C3AED), const Color(0xFFF97316)],
-                ),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    isActive ? LucideIcons.timer : LucideIcons.focus,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  if (isActive)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: focusState.isPaused
-                              ? Colors.orange
-                              : const Color(0xFF10B981),
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isActive ? 'Focus Session Active' : 'Start Focus Session',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isActive
-                        ? focusState.currentSession?.formattedTime ?? 'Running'
-                        : 'Pomodoro timer with app blocking',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: isActive
-                          ? const Color(0xFF7C3AED)
-                          : (isDark ? Colors.white70 : AppColors.textSecondary),
-                      fontWeight:
-                          isActive ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              isActive ? LucideIcons.arrowRight : LucideIcons.play,
-              color: isActive
-                  ? const Color(0xFF7C3AED)
-                  : (isDark ? Colors.white54 : AppColors.textSecondary),
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureButton({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: Theme.of(context).brightness == Brightness.dark
-                ? [
-                    Colors.white.withOpacity(0.1),
-                    Colors.white.withOpacity(0.05),
-                  ]
-                : [
-                    AppColors.textPrimary.withOpacity(0.05),
-                    AppColors.textPrimary.withOpacity(0.02),
-                  ],
-          ),
-          border: Border.all(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.white.withOpacity(0.2)
-                : AppColors.textPrimary.withOpacity(0.1),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
-                ),
-              ),
-              child: Icon(icon, color: Colors.white, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white
-                          : AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white70
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              LucideIcons.arrowRight,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white70
-                  : AppColors.textSecondary,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClaimXPButton(UserModel user) {
-    return Consumer<StreakState>(
-      builder: (context, streakState, child) {
-        return SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton.icon(
-            onPressed: () async {
-              final completed = context.read<MissionsModel>().completedCount;
-              if (completed > 0) {
-                final xpEarned = completed * 10;
-                final userModel = context.read<UserModel>();
-                final rewardsOrchestrator =
-                    context.read<rewards.RewardOrchestrator>();
-
-                final previousLevel = userModel.level;
-
-                // Add XP to user model
-                userModel.addXp(xpEarned);
-
-                final newXp = userModel.xp;
-                final newLevel = userModel.level;
-
-                // Queue XP gained reward
-                final nextLevelTotalXp = XpConfig.totalXpForLevel(newLevel + 1);
-                final xpNeeded =
-                    (nextLevelTotalXp - newXp).clamp(0, nextLevelTotalXp);
-
-                rewardsOrchestrator.queueReward(
-                  rewards.XpGained(
-                    amount: xpEarned,
-                    newTotal: newXp,
-                    xpNeeded: xpNeeded,
-                    level: newLevel,
-                  ),
-                );
-
-                // Queue level-up reward if level changed
-                if (newLevel > previousLevel) {
-                  rewardsOrchestrator.queueReward(
-                    rewards.LevelUp(
-                      newLevel: newLevel,
-                      newTitle: 'Level $newLevel',
-                    ),
-                  );
-                }
-
-                // Record challenge activity in streak service
-                // This will automatically update the streak count
-                await StreakService.recordActivity(
-                  StreakActivityType.challenge,
-                  xpEarned: xpEarned,
-                );
-
-                // Sync UserModel streak with StreakState for consistency
-                final newStreak = context.read<StreakState>().currentStreak;
-                context.read<UserModel>().setStreak(newStreak);
-
-                // Queue streak milestone reward for key thresholds
-                const milestones = [7, 14, 30, 60, 90];
-                if (milestones.contains(newStreak)) {
-                  rewardsOrchestrator.queueReward(
-                    rewards.StreakMilestone(
-                      days: newStreak,
-                      label: '$newStreak-day streak',
-                    ),
-                  );
-                }
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          'Great work! +$xpEarned XP • Streak: $newStreak 🔥'),
-                      backgroundColor: AppColors.success,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-
-                // Show any queued rewards via overlays/snackbars
-                if (mounted) {
-                  _checkAndShowRewards(context);
-                }
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Complete at least one mission first!'),
-                    backgroundColor: AppColors.orange,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-            icon: const Icon(LucideIcons.sparkles),
-            label: Text(
-              streakState.isTodayCompleted
-                  ? 'Streak Secured! 🔥'
-                  : 'Claim Daily XP',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: streakState.isTodayCompleted
-                  ? AppColors.success
-                  : AppColors.purple,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _checkAndShowRewards(BuildContext context) {
-    final orchestrator = context.read<rewards.RewardOrchestrator>();
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final streakState = context.read<StreakState>();
-
-    while (orchestrator.hasPending) {
-      final event = orchestrator.consumeNext();
-      if (event == null) break;
-
-      if (event is rewards.XpGained) {
-        // Use the new overlay widget (non-blocking).
-        XpBurstOverlay.show(
-          context,
-          amount: event.amount,
-          oldXp: (event.newTotal - event.amount).clamp(0, event.newTotal),
-          newXp: event.newTotal,
-          xpNeeded: event.xpNeeded,
-          level: event.level,
-        );
-      } else if (event is rewards.LevelUp) {
-        LevelUpOverlay.show(
-          context,
-          newLevel: event.newLevel,
-          title: event.newTitle,
-        );
-      } else if (event is rewards.StreakMilestone) {
-        StreakMilestoneOverlay.show(
-          context,
-          days: event.days,
-          label: event.label,
-          freezeTokens: streakState.freezeTokens,
-        );
-      } else if (event is rewards.BadgeUnlocked) {
-        BadgeUnlockOverlay.show(
-          context,
-          badgeId: event.badgeId,
-          badgeName: event.badgeName,
-          emoji: event.emoji,
-        );
-      } else if (event is rewards.UrgeResisted) {
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'You held off for ${event.secondsHeld} seconds. That\'s strength.',
-            ),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
   }
 }

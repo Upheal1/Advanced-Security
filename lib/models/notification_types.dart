@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../navigation/app_routes.dart';
+
 /// Types of notifications in the app
 enum NotificationType {
   /// Warning notification when approaching usage limit
@@ -137,14 +139,11 @@ class DeepLinkHandler {
   }
 
   static void _navigateToAnalytics(BuildContext context, String? appName) {
-    // Navigate to analytics screen
-    // The actual navigation depends on your app's navigation setup
-    Navigator.of(context).pushNamed('/analytics', arguments: {'appName': appName});
+    const AnalyticsRoute().go(context);
   }
 
   static void _navigateToProfile(BuildContext context) {
-    // Navigate to profile screen
-    Navigator.of(context).pushNamed('/profile');
+    const ProfileRoute().go(context);
   }
 
   /// Get the route name for a notification type
@@ -153,11 +152,11 @@ class DeepLinkHandler {
       case NotificationType.warning:
       case NotificationType.limit:
       case NotificationType.summary:
-        return '/analytics';
+        return AnalyticsRoute.path;
       case NotificationType.achievement:
-        return '/profile';
+        return ProfileRoute.path;
       case NotificationType.info:
-        return '/home';
+        return HomeRoute.path;
     }
   }
 }

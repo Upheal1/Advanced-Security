@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../design_system/tokens/app_motion.dart';
+
 class AppAnimations {
-  static const Duration defaultDuration = Duration(milliseconds: 600);
-  static const Duration fastDuration = Duration(milliseconds: 300);
-  static const Duration slowDuration = Duration(milliseconds: 1000);
+  static const Duration defaultDuration = AppMotion.medium;
+  static const Duration fastDuration = AppMotion.fast;
+  static const Duration slowDuration = AppMotion.celebratory;
 
   // Fade animations
   static Widget fadeIn(Widget child, {Duration? duration}) {
@@ -85,7 +87,7 @@ class AppAnimations {
       begin: const Offset(0.0, 0.0),
       end: const Offset(1.0, 1.0),
       duration: duration ?? defaultDuration,
-      curve: Curves.elasticOut,
+      curve: AppMotion.playful,
     );
   }
 

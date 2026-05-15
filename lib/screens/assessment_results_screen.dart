@@ -6,10 +6,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:provider/provider.dart';
-import '../main.dart';
-import '../models/navigation_model.dart';
 import '../features/community/services/community_supabase.dart';
+import '../navigation/app_routes.dart';
 
 /// Enhanced screen to display clinical assessment results and RAG recommendations
 class AssessmentResultsScreen extends StatefulWidget {
@@ -105,18 +103,10 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen>
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
           try {
-            // Navigate to home when back button is pressed and reset navigation index
-            final navModel = context.read<NavigationModel>();
-            navModel.setIndex(0);
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const RootNav()),
-            );
+            const HomeRoute().go(context);
           } catch (e) {
             debugPrint('Navigation error: $e');
-            // Fallback: just navigate without setting index
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const RootNav()),
-            );
+            const HomeRoute().go(context);
           }
         }
       },
@@ -249,18 +239,10 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen>
         ),
         onPressed: () {
           try {
-            // Navigate to home and reset navigation index
-            final navModel = context.read<NavigationModel>();
-            navModel.setIndex(0);
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const RootNav()),
-            );
+            const HomeRoute().go(context);
           } catch (e) {
             debugPrint('Navigation error: $e');
-            // Fallback: just navigate without setting index
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const RootNav()),
-            );
+            const HomeRoute().go(context);
           }
         },
         tooltip: 'Go to Home',
@@ -1311,18 +1293,10 @@ class _AssessmentResultsScreenState extends State<AssessmentResultsScreen>
       child: ElevatedButton(
         onPressed: () {
           try {
-            // Navigate to home and reset navigation index
-            final navModel = context.read<NavigationModel>();
-            navModel.setIndex(0);
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const RootNav()),
-            );
+            const HomeRoute().go(context);
           } catch (e) {
             debugPrint('Navigation error: $e');
-            // Fallback: just navigate without setting index
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const RootNav()),
-            );
+            const HomeRoute().go(context);
           }
         },
         style: ElevatedButton.styleFrom(

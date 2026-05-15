@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../models/auth_model.dart';
-import 'signup_screen.dart';
+import '../navigation/app_routes.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -274,54 +274,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
     Navigator.of(context).popUntil((route) => route.isFirst);
-  }
-
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          backgroundColor: Colors.green.shade50,
-          title: Row(
-            children: [
-              Icon(Icons.check_circle_outline,
-                  color: Colors.green.shade600, size: 28),
-              const SizedBox(width: 12),
-              Text(
-                'Welcome Back!',
-                style: GoogleFonts.inter(
-                  color: Colors.green.shade800,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            'You have successfully logged in to UpHeal.',
-            style: GoogleFonts.inter(
-              color: Colors.green.shade700,
-              fontSize: 14,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Continue',
-                style: GoogleFonts.inter(
-                  color: Colors.green.shade600,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override
@@ -596,12 +548,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SignUpScreen(),
-              ),
-            );
+            const SignUpRoute().push<void>(context);
           },
           child: Text(
             'Sign Up',

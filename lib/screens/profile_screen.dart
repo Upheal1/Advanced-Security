@@ -7,6 +7,7 @@ import '../models/achievement.dart';
 import '../models/mission_model.dart';
 import '../models/streak_model.dart';
 import '../models/user_model.dart';
+import '../navigation/app_routes.dart';
 import '../constants/app_colors.dart';
 import '../services/challenge_service.dart';
 import '../widgets/drawer_menu_button.dart';
@@ -40,8 +41,15 @@ class ProfileScreen extends StatelessWidget {
                       const DrawerMenuButton(iconColor: Colors.white),
                       const Spacer(),
                       IconButton(
-                        onPressed: () =>
-                            Navigator.of(context).pushNamed('/avatar'),
+                        onPressed: () => const SettingsRoute().push<void>(context),
+                        icon: const Icon(
+                          LucideIcons.settings,
+                          color: Colors.white,
+                        ),
+                        tooltip: 'Open settings',
+                      ),
+                      IconButton(
+                        onPressed: () => const AvatarRoute().push<void>(context),
                         icon:
                             const Icon(LucideIcons.pencil, color: Colors.white),
                         tooltip: 'Edit avatar',
@@ -53,8 +61,7 @@ class ProfileScreen extends StatelessWidget {
                     mood: avatarProvider.mood,
                     avatarAssetPath: avatarProvider.selectedAvatarAsset,
                     size: 170,
-                    onEditPressed: () =>
-                        Navigator.of(context).pushNamed('/avatar'),
+                    onEditPressed: () => const AvatarRoute().push<void>(context),
                   ),
                   const SizedBox(height: 18),
                   _ProfileInfoCard(
@@ -68,8 +75,7 @@ class ProfileScreen extends StatelessWidget {
                     xp: userModel.xp,
                     badges: userModel.badges,
                     rank: userModel.rank,
-                    onBadgesTap: () =>
-                        Navigator.of(context).pushNamed('/badges'),
+                    onBadgesTap: () => const BadgesRoute().push<void>(context),
                   ),
                   const SizedBox(height: 14),
                   _StreakProgressCard(
@@ -85,8 +91,7 @@ class ProfileScreen extends StatelessWidget {
                       user: userModel,
                       tasksCompleted: tasksCompleted,
                     ),
-                    onViewAll: () =>
-                        Navigator.of(context).pushNamed('/achievements'),
+                    onViewAll: () => const AchievementsRoute().push<void>(context),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
