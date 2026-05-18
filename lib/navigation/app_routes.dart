@@ -170,6 +170,16 @@ class BadgesRoute extends AppRouteData {
   String get location => path;
 }
 
+class StreakRoute extends AppRouteData {
+  const StreakRoute();
+
+  static const String name = 'streaks';
+  static const String path = '/app/streaks';
+
+  @override
+  String get location => path;
+}
+
 class AchievementsRoute extends AppRouteData {
   const AchievementsRoute();
 
@@ -400,4 +410,5 @@ const Set<String> publicRoutePrefixes = <String>{
   LoginRoute.path,
   SignUpRoute.path,
   '/onboarding',
+  '/onboarding-flow',
 };

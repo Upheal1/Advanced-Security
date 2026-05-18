@@ -1,18 +1,22 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+
+import '../avatar/models/avatar_config.dart';
+import '../avatar/services/avatar_provider.dart';
+import '../avatar/ui/avatar_widget.dart';
+import '../constants/app_colors.dart';
+import '../gamification/xp_config.dart';
 import '../models/auth_model.dart';
-import '../models/achievement.dart';
+import '../models/journal_model.dart';
 import '../models/mission_model.dart';
 import '../models/streak_model.dart';
 import '../models/user_model.dart';
 import '../navigation/app_routes.dart';
-import '../constants/app_colors.dart';
 import '../services/challenge_service.dart';
-import '../widgets/drawer_menu_button.dart';
-import '../avatar/services/avatar_provider.dart';
-import 'avatar_display.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -21,229 +25,340 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF0B0D12) : theme.scaffoldBackgroundColor;
+    final authModel = context.watch<AuthModel>();
+    final userModel = context.watch<UserModel>();
+    final avatarProvider = context.watch<AvatarProvider>();
+    final streakState = context.watch<StreakState>();
+    final missionsModel = context.watch<MissionsModel>();
+    final challengeService = context.watch<ChallengeService>();
+    final journalModel = context.watch<JournalModel>();
+
+    final username = authModel.userName ?? userModel.username;
+    final currentStreak =
+        math.max<int>(userModel.streakDays, streakState.currentStreak);
+    final tasksCompleted =
+        missionsModel.completedCount + challengeService.completedTotalCount;
+    final journalEntries = journalModel.entries.length;
+    final focusSessions = userModel.totalSessions;
+    final moodCheckIns =
+        math.max<int>(currentStreak, focusSessions > 0 ? 1 : 0);
+    final nextLevelXp = XpConfig.totalXpForLevel(userModel.level + 1);
+
+    final progressItems = <_ProgressSnapshotItemData>[
+      _ProgressSnapshotItemData(
+        label: 'Journal entries',
+        current: journalEntries,
+        goal: _nextGoal(journalEntries, min: 7, step: 7),
+        color: const Color(0xFF7EA18D),
+      ),
+      _ProgressSnapshotItemData(
+        label: 'Mindfulness sessions',
+        current: focusSessions,
+        goal: _nextGoal(focusSessions, min: 7, step: 7),
+        color: const Color(0xFF6CA4D9),
+      ),
+      _ProgressSnapshotItemData(
+        label: 'Tasks completed',
+        current: tasksCompleted,
+        goal: _nextGoal(tasksCompleted, min: 12, step: 6),
+        color: const Color(0xFFD3A852),
+      ),
+      _ProgressSnapshotItemData(
+        label: 'Mood check-ins',
+        current: moodCheckIns,
+        goal: _nextGoal(moodCheckIns, min: 7, step: 7),
+        color: const Color(0xFFA487F7),
+      ),
+    ];
 
     return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        child: Consumer6<AuthModel, UserModel, AvatarProvider, StreakState,
-            MissionsModel, ChallengeService>(
-          builder: (context, authModel, userModel, avatarProvider, streakState,
-              missionsModel, challengeService, _) {
-            final tasksCompleted = missionsModel.completedCount +
-                challengeService.completedTotalCount;
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const DrawerMenuButton(iconColor: Colors.white),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => const SettingsRoute().push<void>(context),
-                        icon: const Icon(
-                          LucideIcons.settings,
-                          color: Colors.white,
-                        ),
-                        tooltip: 'Open settings',
-                      ),
-                      IconButton(
-                        onPressed: () => const AvatarRoute().push<void>(context),
-                        icon:
-                            const Icon(LucideIcons.pencil, color: Colors.white),
-                        tooltip: 'Edit avatar',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  AvatarDisplay(
-                    mood: avatarProvider.mood,
-                    avatarAssetPath: avatarProvider.selectedAvatarAsset,
-                    size: 170,
-                    onEditPressed: () => const AvatarRoute().push<void>(context),
-                  ),
-                  const SizedBox(height: 18),
-                  _ProfileInfoCard(
-                    username: authModel.userName ?? userModel.username,
-                    level: userModel.level,
-                    xp: userModel.xp,
-                  ),
-                  const SizedBox(height: 14),
-                  _QuickStatsRow(
-                    level: userModel.level,
-                    xp: userModel.xp,
-                    badges: userModel.badges,
-                    rank: userModel.rank,
-                    onBadgesTap: () => const BadgesRoute().push<void>(context),
-                  ),
-                  const SizedBox(height: 14),
-                  _StreakProgressCard(
-                    streakDays: userModel.streakDays,
-                    isAtRisk: streakState.isStreakAtRisk,
-                    hoursLeft: streakState.hoursUntilStreakLoss,
-                    nextMilestoneDays: streakState.nextMilestone?.daysRequired,
-                    daysUntilNextMilestone: streakState.daysUntilNextMilestone,
-                  ),
-                  const SizedBox(height: 14),
-                  _AchievementsPreviewCard(
-                    achievements: _computeAchievementsPreview(
-                      user: userModel,
-                      tasksCompleted: tasksCompleted,
-                    ),
-                    onViewAll: () => const AchievementsRoute().push<void>(context),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Log out'),
-                            content: const Text(
-                                'Are you sure you want to log out?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () =>
-                                    Navigator.of(ctx).pop(false),
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed: () =>
-                                    Navigator.of(ctx).pop(true),
-                                child: const Text('Log out',
-                                    style:
-                                        TextStyle(color: Colors.red)),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true && context.mounted) {
-                          await authModel.logout();
-                        }
-                      },
-                      icon: const Icon(LucideIcons.logOut,
-                          color: Colors.red, size: 18),
-                      label: const Text('Log out',
-                          style: TextStyle(color: Colors.red)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+      backgroundColor:
+          isDark ? const Color(0xFF141824) : const Color(0xFFF4F1E8),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark
+                ? const [Color(0xFF1A2030), Color(0xFF111522)]
+                : const [Color(0xFFF6F4EC), Color(0xFFEAEFE8)],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ProfileHeroCard(
+                  username: username,
+                  level: userModel.level,
+                  rank: userModel.rank,
+                  levelTitle: _levelTitle(userModel.level),
+                  avatarAssetPath: avatarProvider.selectedAvatarAsset,
+                  mood: avatarProvider.mood,
+                  onOpenSettings: () => const SettingsRoute().push<void>(context),
+                  onEditAvatar: () => const AvatarRoute().push<void>(context),
+                ),
+                const SizedBox(height: 14),
+                _XpProgressCard(
+                  xp: userModel.xp,
+                  level: userModel.level,
+                  nextLevelXp: nextLevelXp,
+                  progress: userModel.levelProgress,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: LucideIcons.flame,
+                        iconColor: const Color(0xFFF59E0B),
+                        value: '$currentStreak',
+                        label: 'Streak',
+                        onTap: () => const StreakRoute().push<void>(context),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: LucideIcons.star,
+                        iconColor: const Color(0xFFEAB308),
+                        value:
+                            '$journalEntries/${_nextGoal(journalEntries, min: 7, step: 7)}',
+                        label: 'Day',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: LucideIcons.award,
+                        iconColor: const Color(0xFF9B87F5),
+                        value: '${userModel.badges}',
+                        label: 'Badges',
+                        onTap: () => const BadgesRoute().push<void>(context),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _SummaryTile(
+                        icon: LucideIcons.users,
+                        iconColor: const Color(0xFF5F95E7),
+                        value: '#${userModel.rank}',
+                        label: 'Rank',
+                        onTap: () => const CommunityRoute().push<void>(context),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _SegmentedProfileActions(
+                  onBadgesTap: () => const BadgesRoute().push<void>(context),
+                  onBoardTap: () => const CommunityRoute().push<void>(context),
+                ),
+                const SizedBox(height: 14),
+                _ProgressSnapshotCard(items: progressItems),
+                const SizedBox(height: 16),
+                _QuickAccessCard(
+                  icon: LucideIcons.bookOpen,
+                  iconTint: const Color(0xFF87A98B),
+                  title: 'My Journal Entries',
+                  subtitle: '${_formatNumber(journalEntries)} entries written',
+                  onTap: () => const JournalRoute().push<void>(context),
+                ),
+                const SizedBox(height: 12),
+                _QuickAccessCard(
+                  icon: LucideIcons.users,
+                  iconTint: const Color(0xFF6E9DE4),
+                  title: 'My Support Groups',
+                  subtitle: userModel.rank <= 10
+                      ? 'You are ranked near the top this week'
+                      : 'Check in with your community spaces',
+                  onTap: () => const CommunityRoute().push<void>(context),
+                ),
+                const SizedBox(height: 12),
+                _QuickAccessCard(
+                  icon: LucideIcons.sparkles,
+                  iconTint: const Color(0xFFD4A65A),
+                  title: 'Book a Session',
+                  subtitle: 'AI therapist support is available now',
+                  onTap: () => const AiChatRoute().push<void>(context),
+                ),
+                const SizedBox(height: 18),
+                _LogoutButton(
+                  onLogout: () => _confirmLogout(context, authModel),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
-}
 
-List<Achievement> _computeAchievementsPreview({
-  required UserModel user,
-  required int tasksCompleted,
-}) {
-  // Lightweight "preview" progress mapping (no persistence yet).
-  // If you later add an AchievementsProvider, this can be replaced by that.
-  int progressFor(Achievement a) {
-    switch (a.type) {
-      case AchievementType.focusStreak:
-        return user.streakDays;
-      case AchievementType.totalSessions:
-        return user.totalSessions;
-      case AchievementType.totalTime:
-        return user.totalFocusMinutes;
-      case AchievementType.level:
-        return user.level;
-      case AchievementType.special:
-        // Map special to "tasks completed" as a motivating proxy for now.
-        return tasksCompleted;
+  static Future<void> _confirmLogout(
+    BuildContext context,
+    AuthModel authModel,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log out'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(
+              'Log out',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && context.mounted) {
+      await authModel.logout();
     }
   }
-
-  final all = Achievement.getDefaultAchievements().map((a) {
-    final p = progressFor(a);
-    final unlocked = p >= a.requirement;
-    return a.copyWith(
-      currentProgress: p,
-      isUnlocked: unlocked,
-      unlockedAt: unlocked ? (a.unlockedAt ?? DateTime.now()) : null,
-    );
-  }).toList(growable: false);
-
-  // Show a premium mix: prioritize unlocked, then highest progress.
-  all.sort((a, b) {
-    final au = a.isUnlocked ? 1 : 0;
-    final bu = b.isUnlocked ? 1 : 0;
-    if (au != bu) return bu - au;
-    final ap = a.currentProgress ?? 0;
-    final bp = b.currentProgress ?? 0;
-    return bp.compareTo(ap);
-  });
-
-  return all.take(4).toList(growable: false);
 }
 
-class _ProfileInfoCard extends StatelessWidget {
-  final String username;
-  final int level;
-  final int xp;
-
-  const _ProfileInfoCard({
+class _ProfileHeroCard extends StatelessWidget {
+  const _ProfileHeroCard({
     required this.username,
     required this.level,
-    required this.xp,
+    required this.rank,
+    required this.levelTitle,
+    required this.avatarAssetPath,
+    required this.mood,
+    required this.onOpenSettings,
+    required this.onEditAvatar,
   });
+
+  final String username;
+  final int level;
+  final int rank;
+  final String levelTitle;
+  final String avatarAssetPath;
+  final String mood;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onEditAvatar;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [Color(0xFF263146), Color(0xFF1D2537)]
+              : const [Color(0xFFC8DBF0), Color(0xFFE6ECEF)],
+        ),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: Colors.black.withValues(alpha: isDark ? 0.26 : 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            username,
-            style: GoogleFonts.inter(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
+          _AvatarTile(
+            avatarAssetPath: avatarAssetPath,
+            mood: mood,
+            onEditAvatar: onEditAvatar,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.onSurface,
+                    letterSpacing: -0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0B659),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'LVL $level',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFFFCFCFA),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      levelTitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  rank <= 10
+                      ? 'You are building steady momentum this week.'
+                      : 'Keep showing up. Your progress is compounding.',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              _Pill(
-                icon: LucideIcons.trophy,
-                label: 'Level $level',
+          const SizedBox(width: 10),
+          Material(
+            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
+            shape: const CircleBorder(),
+            elevation: isDark ? 0 : 4,
+            shadowColor: Colors.black.withValues(alpha: 0.12),
+            child: IconButton(
+              onPressed: onOpenSettings,
+              icon: Icon(
+                LucideIcons.settings2,
+                size: 19,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
               ),
-              const SizedBox(width: 10),
-              _Pill(
-                icon: LucideIcons.zap,
-                label: '$xp XP',
-              ),
-            ],
+              tooltip: 'Open settings',
+            ),
           ),
         ],
       ),
@@ -251,66 +366,67 @@ class _ProfileInfoCard extends StatelessWidget {
   }
 }
 
-class _QuickStatsRow extends StatelessWidget {
-  final int level;
-  final int xp;
-  final int badges;
-  final int rank;
-  final VoidCallback onBadgesTap;
-
-  const _QuickStatsRow({
-    required this.level,
-    required this.xp,
-    required this.badges,
-    required this.rank,
-    required this.onBadgesTap,
+class _AvatarTile extends StatelessWidget {
+  const _AvatarTile({
+    required this.avatarAssetPath,
+    required this.mood,
+    required this.onEditAvatar,
   });
+
+  final String avatarAssetPath;
+  final String mood;
+  final VoidCallback onEditAvatar;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        Expanded(
-          child: _StatCard(
-            title: 'Level',
-            value: '$level',
-            icon: LucideIcons.trophy,
-            tint: AppColors.purple,
-            surface: theme.colorScheme.surface,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-            title: 'XP',
-            value: '$xp',
-            icon: LucideIcons.zap,
-            tint: const Color(0xFF22C55E),
-            surface: theme.colorScheme.surface,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: GestureDetector(
-            onTap: onBadgesTap,
-            child: _StatCard(
-              title: 'Badges',
-              value: '$badges',
-              icon: LucideIcons.award,
-              tint: const Color(0xFFFFD700),
-              surface: theme.colorScheme.surface,
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF70A9DE), Color(0xFF5B90CA)],
             ),
           ),
+          alignment: Alignment.center,
+          child: AvatarWidget(
+            config: AvatarConfig(
+              skin: 'skin_1',
+              hair: 'hair_1',
+              outfit: 'outfit_1',
+            ),
+            mood: mood,
+            size: 54,
+            avatarAssetPath: avatarAssetPath,
+            bubbleText: '',
+            showBubble: false,
+          ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-            title: 'Rank',
-            value: '#$rank',
-            icon: LucideIcons.barChart3,
-            tint: const Color(0xFFF97316),
-            surface: theme.colorScheme.surface,
+        Positioned(
+          right: -4,
+          bottom: -4,
+          child: Material(
+            color: Colors.white,
+            shape: const CircleBorder(),
+            elevation: 3,
+            shadowColor: Colors.black.withValues(alpha: 0.12),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onEditAvatar,
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(
+                  LucideIcons.pencil,
+                  size: 13,
+                  color: AppColors.blue,
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -318,227 +434,317 @@ class _QuickStatsRow extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
-  final IconData icon;
-  final String label;
+class _XpProgressCard extends StatelessWidget {
+  const _XpProgressCard({
+    required this.xp,
+    required this.level,
+    required this.nextLevelXp,
+    required this.progress,
+  });
 
-  const _Pill({required this.icon, required this.label});
+  final int xp;
+  final int level;
+  final int nextLevelXp;
+  final double progress;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return _SoftSurface(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '${_formatNumber(xp)} XP',
+                style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onSurface,
+                  letterSpacing: -0.7,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Level ${level + 1} at ${_formatNumber(nextLevelXp)} XP',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : const Color(0xFFE6EAF0),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFFDEB65E)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryTile extends StatefulWidget {
+  const _SummaryTile({
+    required this.icon,
+    required this.iconColor,
+    required this.value,
+    required this.label,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String value;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  State<_SummaryTile> createState() => _SummaryTileState();
+}
+
+class _SummaryTileState extends State<_SummaryTile> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = _SoftSurface(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      child: Column(
+        children: [
+          Icon(widget.icon, size: 15, color: widget.iconColor),
+          const SizedBox(height: 8),
+          Text(
+            widget.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Theme.of(context).colorScheme.onSurface,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            widget.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.55),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (widget.onTap == null) {
+      return child;
+    }
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _isPressed
+              ? [
+                  BoxShadow(
+                    color: widget.iconColor.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : [],
+        ),
+        child: AnimatedScale(
+          scale: _isPressed ? 0.95 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: widget.onTap,
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SegmentedProfileActions extends StatelessWidget {
+  const _SegmentedProfileActions({
+    required this.onBadgesTap,
+    required this.onBoardTap,
+  });
+
+  final VoidCallback onBadgesTap;
+  final VoidCallback onBoardTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        color: isDark ? const Color(0xFF1B2130) : const Color(0xFFEDEBE4),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: AppColors.purple),
+          const Expanded(
+            child: _SegmentChip(
+              icon: LucideIcons.scrollText,
+              label: 'Stats',
+              isSelected: true,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _SegmentChip(
+              icon: LucideIcons.medal,
+              label: 'Badges',
+              onTap: onBadgesTap,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _SegmentChip(
+              icon: LucideIcons.trophy,
+              label: 'Board',
+              onTap: onBoardTap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentChip extends StatelessWidget {
+  const _SegmentChip({
+    required this.icon,
+    required this.label,
+    this.isSelected = false,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final child = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 13,
+            color: isSelected
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.onSurface.withValues(alpha: 0.48),
+          ),
           const SizedBox(width: 6),
           Text(
             label,
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
+              color: isSelected
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.48),
             ),
           ),
         ],
       ),
     );
+
+    if (onTap == null) {
+      return child;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: child,
+      ),
+    );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color tint;
-  final Color surface;
+class _ProgressSnapshotCard extends StatelessWidget {
+  const _ProgressSnapshotCard({required this.items});
 
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.tint,
-    required this.surface,
-  });
+  final List<_ProgressSnapshotItemData> items;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: surface.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+
+    return _SoftSurface(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: tint.withOpacity(0.18),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 16, color: tint),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
+          for (var index = 0; index < items.length; index++) ...[
+            _ProgressSnapshotRow(item: items[index]),
+            if (index != items.length - 1) const SizedBox(height: 10),
+          ],
           const SizedBox(height: 2),
           Text(
-            title,
+            'Your weekly wellness snapshot updates as you journal, reflect, and finish tasks.',
             style: GoogleFonts.inter(
               fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withOpacity(0.65),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StreakProgressCard extends StatelessWidget {
-  final int streakDays;
-  final bool isAtRisk;
-  final int hoursLeft;
-  final int? nextMilestoneDays;
-  final int daysUntilNextMilestone;
-
-  const _StreakProgressCard({
-    required this.streakDays,
-    required this.isAtRisk,
-    required this.hoursLeft,
-    required this.nextMilestoneDays,
-    required this.daysUntilNextMilestone,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final next = nextMilestoneDays ?? 7;
-    final progress = next <= 0 ? 0.0 : (streakDays / next).clamp(0.0, 1.0);
-
-    final headline = isAtRisk
-        ? 'Streak at risk'
-        : streakDays == 0
-            ? 'Start your streak'
-            : 'Streak active';
-
-    final sub = isAtRisk
-        ? '$hoursLeft hours left to save it'
-        : streakDays == 0
-            ? 'Complete one activity today'
-            : '$daysUntilNextMilestone days to next milestone';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                LucideIcons.flame,
-                size: 18,
-                color: isAtRisk ? const Color(0xFFF97316) : AppColors.purple,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  headline,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: Colors.white.withOpacity(0.06),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: Text(
-                  '$streakDays days',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            sub,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 10,
-              backgroundColor: Colors.white.withOpacity(0.10),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isAtRisk ? const Color(0xFFF97316) : AppColors.purple,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Next milestone: $next days',
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface.withOpacity(0.65),
+              fontWeight: FontWeight.w500,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.48),
             ),
           ),
         ],
@@ -547,170 +753,237 @@ class _StreakProgressCard extends StatelessWidget {
   }
 }
 
-class _AchievementsPreviewCard extends StatelessWidget {
-  final List<Achievement> achievements;
-  final VoidCallback onViewAll;
+class _ProgressSnapshotRow extends StatelessWidget {
+  const _ProgressSnapshotRow({required this.item});
 
-  const _AchievementsPreviewCard({
-    required this.achievements,
-    required this.onViewAll,
-  });
+  final _ProgressSnapshotItemData item;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final progress =
+        item.goal <= 0 ? 0.0 : (item.current / item.goal).clamp(0.0, 1.0);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                LucideIcons.trophy,
-                size: 18,
-                color: AppColors.purple,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Achievements',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                item.label,
                 style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: theme.colorScheme.onSurface,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.74),
                 ),
               ),
-              const Spacer(),
-              TextButton(
-                onPressed: onViewAll,
-                child: Text(
-                  'View all',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.purple,
-                  ),
+            ),
+            Text(
+              '${item.current}/${item.goal}',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 5,
+            backgroundColor: theme.brightness == Brightness.dark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFE4E8EE),
+            valueColor: AlwaysStoppedAnimation<Color>(item.color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickAccessCard extends StatelessWidget {
+  const _QuickAccessCard({
+    required this.icon,
+    required this.iconTint,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconTint;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: onTap,
+        child: _SoftSurface(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconTint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 18, color: iconTint),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.inter(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurface,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                LucideIcons.chevronRight,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 104,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: achievements.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                final a = achievements[index];
-                final progress = a.progress;
-                final locked = !a.isUnlocked;
-                return Container(
-                  width: 150,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: theme.colorScheme.surface.withOpacity(0.55),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    boxShadow: a.isUnlocked
-                        ? [
-                            BoxShadow(
-                              color: AppColors.purple.withOpacity(0.22),
-                              blurRadius: 16,
-                              offset: const Offset(0, 10),
-                            ),
-                          ]
-                        : [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.25),
-                              blurRadius: 16,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                  ),
-                  child: Opacity(
-                    opacity: locked ? 0.6 : 1,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: a.color.withOpacity(0.18),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(a.icon,
-                                  style: const TextStyle(fontSize: 16)),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                a.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            value: locked ? progress : 1,
-                            minHeight: 8,
-                            backgroundColor: Colors.white.withOpacity(0.10),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              locked
-                                  ? a.color.withOpacity(0.85)
-                                  : AppColors.purple,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          locked
-                              ? '${a.currentProgress ?? 0}/${a.requirement}'
-                              : 'Unlocked',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: locked
-                                ? theme.colorScheme.onSurface.withOpacity(0.65)
-                                : AppColors.purple,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class _LogoutButton extends StatelessWidget {
+  const _LogoutButton({required this.onLogout});
+
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onLogout,
+      icon: const Icon(LucideIcons.logOut, size: 18, color: Colors.red),
+      label: Text(
+        'Log out',
+        style: GoogleFonts.inter(
+          fontWeight: FontWeight.w700,
+          color: Colors.red,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+    );
+  }
+}
+
+class _SoftSurface extends StatelessWidget {
+  const _SoftSurface({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1A2030)
+            : Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : const Color(0xFFF0EEE7),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.06),
+            blurRadius: 26,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ProgressSnapshotItemData {
+  const _ProgressSnapshotItemData({
+    required this.label,
+    required this.current,
+    required this.goal,
+    required this.color,
+  });
+
+  final String label;
+  final int current;
+  final int goal;
+  final Color color;
+}
+
+int _nextGoal(int value, {required int min, required int step}) {
+  final baseline = math.max(value + 1, min);
+  return ((baseline + step - 1) ~/ step) * step;
+}
+
+String _formatNumber(int value) {
+  final digits = value.abs().toString();
+  final parts = <String>[];
+
+  for (var end = digits.length; end > 0; end -= 3) {
+    final start = math.max(0, end - 3);
+    parts.insert(0, digits.substring(start, end));
+  }
+
+  final joined = parts.join(',');
+  return value < 0 ? '-$joined' : joined;
+}
+
+String _levelTitle(int level) {
+  if (level >= 25) return 'Guiding Light';
+  if (level >= 18) return 'Momentum Keeper';
+  if (level >= 10) return 'Trail Blazer';
+  if (level >= 5) return 'Steady Builder';
+  return 'New Explorer';
 }

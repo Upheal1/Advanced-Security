@@ -1,10 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../models/auth_model.dart';
+import '../navigation/app_routes.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -70,8 +72,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
           }
         } else {
           if (mounted) {
-            await Future.delayed(const Duration(milliseconds: 300));
-            _showSuccessDialog();
+            final isAuthenticated =
+                Provider.of<AuthModel>(context, listen: false).isAuthenticated;
+            if (isAuthenticated) {
+              context.go(const HomeRoute().location);
+            } else {
+              context.go(const LoginRoute().location);
+            }
           }
         }
       } catch (e) {
@@ -134,109 +141,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  void _completeSignupNavigation() {
-    if (!mounted) return;
-    Navigator.of(context, rootNavigator: true).pop();
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!mounted) return;
-      try {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      } catch (e) {
-        if (kDebugMode) debugPrint('Navigation error after signup: $e');
-        if (mounted && Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-      }
-    });
-  }
 
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return WillPopScope(
-          onWillPop: () async => false,
-          child: AlertDialog(
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            backgroundColor: Colors.green.shade50,
-            title: Row(
-              children: [
-                Icon(Icons.celebration,
-                    color: Colors.green.shade600, size: 28),
-                const SizedBox(width: 12),
-                Text(
-                  'Welcome to UpHeal!',
-                  style: GoogleFonts.inter(
-                    color: Colors.green.shade800,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Your account has been created successfully!',
-                  style: GoogleFonts.inter(
-                    color: Colors.green.shade700,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.star,
-                          color: Colors.amber.shade600, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'You\'ve earned 100 XP for joining!',
-                          style: GoogleFonts.inter(
-                            color: Colors.green.shade800,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: _completeSignupNavigation,
-                child: Text(
-                  'Start Your Journey',
-                  style: GoogleFonts.inter(
-                    color: Colors.green.shade600,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        _completeSignupNavigation();
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {

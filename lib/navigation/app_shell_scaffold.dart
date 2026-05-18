@@ -304,15 +304,10 @@ class _AppShellScaffoldState extends State<AppShellScaffold> {
     final Color selectedColor = isDark ? AppColors.purple : AppColors.teal;
     final String location = GoRouterState.of(context).uri.path;
     final bool useSidebar = responsive.useSidebarNavigation;
-    final Widget shellBody = AnimatedSwitcher(
-      duration: AppMotion.fast,
-      switchInCurve: AppMotion.standard,
-      switchOutCurve: AppMotion.exit,
-      child: KeyedSubtree(
-        key: ValueKey<String>(location),
-        child: widget.navigationShell,
-      ),
-    );
+    
+    // Directly use the navigation shell - it handles its own state
+    // Adding extra AnimatedSwitcher can cause black screens
+    final Widget shellBody = widget.navigationShell;
 
     return Scaffold(
       key: rootScaffoldKey,

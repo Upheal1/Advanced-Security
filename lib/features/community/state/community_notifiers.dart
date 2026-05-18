@@ -125,10 +125,35 @@ class GroupChatNotifier extends ChangeNotifier {
     if (ch != null) await _repo.sendTypingPulse(ch, typing);
   }
 
-  Future<void> send(String text) => _repo.sendMessage(groupId, text);
+  Future<void> send(String text) async {
+    await _repo.sendMessage(groupId, text);
+    // Message will be received via the existing stream subscription (_msgSub)
+    // Trigger a manual refresh in case realtime doesn't catch it immediately
+    try {
+      final updatedMessages = await _repo.fetchGroupMessages(groupId);
+      messages = updatedMessages.map((m) {
+        final senderRow = m['profiles'] as Map<String, dynamic>?;
+        return GroupChatMessage.fromMap(m, senderRow, {});
+      }).toList();
+      notifyListeners();
+    } catch (_) {
+      // Stream subscription will handle updates
+    }
+  }
 
   Future<void> sendImage(XFile file) async {
     await _repo.sendMessageWithImage(groupId, file);
+    // Message will be received via the existing stream subscription (_msgSub)
+    try {
+      final updatedMessages = await _repo.fetchGroupMessages(groupId);
+      messages = updatedMessages.map((m) {
+        final senderRow = m['profiles'] as Map<String, dynamic>?;
+        return GroupChatMessage.fromMap(m, senderRow, {});
+      }).toList();
+      notifyListeners();
+    } catch (_) {
+      // Stream subscription will handle updates
+    }
   }
 
   Future<void> react(String messageId, String emoji) =>

@@ -4,6 +4,12 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../models/journal_entry.dart';
 import '../constants/app_colors.dart';
 
+int _calcWordCount(String text) {
+  final t = text.trim();
+  if (t.isEmpty) return 0;
+  return t.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+}
+
 // ─────────────────────────── Design tokens ────────────────────────────────
 
 const Color _dvSky  = Color(0xFF72B4D5);
@@ -79,23 +85,58 @@ class JournalingDetailsScreen extends StatelessWidget {
                       fontSize: 18, fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : AppColors.textPrimary)),
                   const SizedBox(height: 4),
-                  Text('${entry.answers.length} question${entry.answers.length != 1 ? 's' : ''} answered',
+                  Text('${_calcWordCount(entry.entryText)} words',
                     style: GoogleFonts.inter(
                       fontSize: 13, color: isDark ? Colors.white54 : _dvGray)),
                 ]),
               ),
-              if (entry.mood != null) _MoodBadge(mood: entry.mood!, isDark: isDark),
+              if (entry.moodLabel != null) _MoodBadge(mood: entry.moodLabel!, isDark: isDark),
             ]),
           ),
 
           const SizedBox(height: 20),
 
-          // ── Q&A cards ──────────────────────────────────────────────
-          ...entry.answers.asMap().entries.map((e) => _QACard(
-            index: e.key,
-            qa: e.value,
-            isDark: isDark,
-          )),
+          // ── Prompt ─────────────────────────────────────────────────
+          if (entry.promptText != null) ...[  
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _dvTeal.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _dvTeal.withValues(alpha: 0.25)),
+              ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(LucideIcons.bookOpen, size: 14, color: _dvTeal),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(entry.promptText!,
+                    style: GoogleFonts.inter(
+                      fontSize: 13, fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : _dvGray, height: 1.45)),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Entry text ─────────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E2535) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.04),
+                blurRadius: 6, offset: const Offset(0, 2))],
+            ),
+            child: Text(entry.entryText,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                color: isDark ? Colors.white : AppColors.textPrimary,
+                height: 1.7)),
+          ),
         ]),
       ),
     );
@@ -159,59 +200,6 @@ class _MoodBadge extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 13, fontWeight: FontWeight.w600, color: color)),
       ]),
-    );
-  }
-}
-
-class _QACard extends StatelessWidget {
-  final int index;
-  final QuestionAnswer qa;
-  final bool isDark;
-  const _QACard({required this.index, required this.qa, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E2535) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.04),
-            blurRadius: 6, offset: const Offset(0, 2))],
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 24, height: 24,
-              decoration: BoxDecoration(
-                color: _dvTeal.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text('${index + 1}',
-                  style: GoogleFonts.inter(
-                    fontSize: 12, fontWeight: FontWeight.w700, color: _dvTeal)),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(qa.question,
-                style: GoogleFonts.inter(
-                  fontSize: 13, fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white70 : _dvGray, height: 1.4)),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Text(qa.answer,
-            style: GoogleFonts.inter(
-              fontSize: 15,
-              color: isDark ? Colors.white : AppColors.textPrimary,
-              height: 1.65)),
-        ]),
-      ),
     );
   }
 }

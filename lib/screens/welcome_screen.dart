@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../navigation/app_routes.dart';
 
@@ -74,6 +75,46 @@ class WelcomeScreen extends StatelessWidget {
                 ),
 
                 const Spacer(flex: 3),
+
+                // Get Started - Launch onboarding
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                          blurRadius: 16,
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () => context.go('/onboarding-flow'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Get Started',
+                        style: GoogleFonts.inter(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 14),
 
                 // Sign In button
                 SizedBox(

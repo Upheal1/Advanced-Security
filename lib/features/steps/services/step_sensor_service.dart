@@ -9,6 +9,7 @@ class StepSensorService {
   StreamSubscription<PedestrianStatus>? _pedestrianStatusSubscription;
   
   int _initialStepCount = 0;
+  int _currentSteps = 0;
   DateTime? _lastStepCountTime;
   DateTime? _lastUpdateTime; // Track last UI update time for throttling
   PedestrianStatus? _status;
@@ -20,6 +21,9 @@ class StepSensorService {
 
   /// Current pedestrian status
   PedestrianStatus? get status => _status;
+
+  /// Get current step count
+  int getCurrentSteps() => _currentSteps;
 
   /// Initialize step sensor and start listening
   Future<bool> initialize() async {
@@ -46,9 +50,17 @@ class StepSensorService {
         (StepCount event) {
           // Set initial step count on first event if not already set
           if (!_initialCountSet) {
-            _initialStepCount = event.steps;
-            _lastStepCountTime = event.timeStamp;
-            _initialCountSet = true;
+            if (event.steps > 0) {
+              _initialStepCount = event.steps;
+              _lastStepCountTime = event.timeStamp;
+              _initialCountSet = true;
+              print('[Sensor] Initial step count set: $_initialStepCount');
+              // Wait for next step event to start counting
+              return;
+            } else {
+              // Steps are 0, skip this event
+              return;
+            }
           }
           _onStepCount(event);
         },
@@ -84,13 +96,25 @@ class StepSensorService {
   void _onStepCount(StepCount event) {
     final now = DateTime.now();
     
+    // Debug: log raw step value
+    print('[Sensor] Raw step count: ${event.steps}, initial: $_initialCountSet (${_initialStepCount})');
+    
     // Throttle updates to max once per second to prevent UI flooding
     if (_lastUpdateTime != null && now.difference(_lastUpdateTime!) < const Duration(seconds: 1)) {
       print('[Sensor] Throttling update, too soon since last update');
       return;
     }
     
+    // Only calculate if we have a valid initial count set
+    if (!_initialCountSet || _initialStepCount == 0) {
+      print('[Sensor] Skipping - no valid initial count');
+      return;
+    }
+    
     final currentSteps = event.steps - _initialStepCount;
+    _currentSteps = currentSteps.clamp(0, 999999);
+    
+    print('[Sensor] Calculated steps: $currentSteps (raw: ${event.steps} - initial: $_initialStepCount)');
 
     // Calculate distance (average step length ~0.7m)
     final distance = currentSteps * 0.0007;

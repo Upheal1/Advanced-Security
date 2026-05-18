@@ -107,21 +107,25 @@ class _JournalingQuestionsScreenState extends State<JournalingQuestionsScreen> {
 
     try {
       final now = DateTime.now();
-      final answers = _questions.asMap().entries
+      final filledPairs = _questions.asMap().entries
           .where((e) => _controllers[e.key].text.trim().isNotEmpty)
-          .map((e) => QuestionAnswer(
-                question: e.value,
-                answer: _controllers[e.key].text.trim(),
-              ))
           .toList();
+
+      final combinedText = filledPairs
+          .map((e) => 'Q: ${e.value}\nA: ${_controllers[e.key].text.trim()}')
+          .join('\n\n');
+
+      final wc = combinedText.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
 
       final entry = JournalEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         date: DateTime(now.year, now.month, now.day),
-        answers: answers,
-        mood: _selectedMood,
+        entryText: combinedText,
+        moodLabel: _selectedMood,
         timestamp: now,
         xpAwarded: _calculateXP(),
+        sourceType: 'guided',
+        wordCount: wc,
       );
 
       final journalModel = Provider.of<JournalModel>(context, listen: false);

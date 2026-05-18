@@ -19,6 +19,16 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" android:minSdkVersion="34" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    
+    <!-- Health Connect permissions -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.WRITE_STEPS" />
+    
+    <!-- Query for Samsung Health -->
+    <queries>
+        <package android:name="com.sec.android.app.shealth" />
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <!-- Used by all builds (release merges debug/profile manifests that only add dev tooling). -->
     <uses-permission android:name="android.permission.INTERNET" />

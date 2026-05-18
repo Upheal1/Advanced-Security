@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,7 @@ import '../constants/app_colors.dart';
 import '../gamification/xp_config.dart';
 import '../widgets/rewards/urge_breathing_widget.dart';
 import '../services/comeback_reward_service.dart';
+import '../navigation/app_routes.dart';
 import 'journal_screen.dart';
 import 'notification_settings_screen.dart';
 import 'roadmap_screen.dart';
@@ -509,6 +512,8 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 18),
         _buildQuickAccessSection(context),
         const SizedBox(height: 18),
+        _buildFocusSessionCard(context),
+        const SizedBox(height: 18),
         _buildContinueAscentCard(context, user),
         const SizedBox(height: 14),
         _buildUpcomingCard(context, missions),
@@ -750,6 +755,117 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildFocusSessionCard(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        const FocusSessionRoute().push<void>(context);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [
+                    const Color(0xFF2D1B69),
+                    const Color(0xFF1A1035),
+                  ]
+                : [
+                    const Color(0xFFF5F3FF),
+                    const Color(0xFFEDE9FE),
+                  ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : const Color(0xFFDDD6FE),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.purple.withValues(alpha: isDark ? 0.3 : 0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.purple,
+                    AppColors.purple.withValues(alpha: 0.7),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.purple.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                LucideIcons.timer,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Focus Session',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF1F1669),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Deep work without distractions',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                LucideIcons.arrowRight,
+                size: 20,
+                color: isDark ? Colors.white70 : AppColors.purple,
+              ),
+            ),
+          ],
+        ),
+      ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0, duration: 400.ms),
     );
   }
 

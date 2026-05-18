@@ -4,8 +4,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:upheal/widgets/drawer_menu_button.dart';
-
 import '../../../constants/app_colors.dart';
 import '../../../design_system/tokens/design_tokens.dart';
 import '../../../navigation/app_routes.dart';
@@ -81,7 +79,6 @@ class _CommunityHubShellState extends State<_CommunityHubShell>
               child: _CommunityHeader(
                 tab: _tab,
                 responsive: responsive,
-                onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
               ),
             ),
           ],
@@ -114,11 +111,9 @@ class _CommunityHeader extends StatelessWidget {
   const _CommunityHeader({
     required this.tab,
     required this.responsive,
-    required this.onMenuTap,
   });
   final TabController tab;
   final AppResponsiveInfo responsive;
-  final VoidCallback onMenuTap;
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +121,7 @@ class _CommunityHeader extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: CommunityDecor.headerGradient(context),
+        color: isDark ? const Color(0xFF0F0F1A) : Colors.white,
         border: Border(
           bottom: BorderSide(
             color: isDark
@@ -151,11 +146,6 @@ class _CommunityHeader extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  DrawerMenuButton(
-                    iconColor: isDark ? Colors.white : const Color(0xFF111827),
-                    onPressed: onMenuTap,
-                  ),
-                  SizedBox(width: responsive.space(AppSpacing.xxs)),
                   Expanded(
                     child: Semantics(
                       header: true,
@@ -166,7 +156,7 @@ class _CommunityHeader extends StatelessWidget {
                           Text(
                             'Community',
                             style: GoogleFonts.inter(
-                              fontSize: responsive.isTabletOrWider ? 28 : 22,
+                              fontSize: responsive.isTabletOrWider ? 28 : 24,
                               fontWeight: FontWeight.w800,
                               color: isDark
                                   ? Colors.white
@@ -175,12 +165,43 @@ class _CommunityHeader extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'A safe space to share, reflect, and grow together',
+                            'A safe space for your journey',
                             style: GoogleFonts.inter(
-                              fontSize: responsive.isTabletOrWider ? 13 : 12,
+                              fontSize: responsive.isTabletOrWider ? 13 : 13,
                               color: isDark
-                                  ? Colors.white70
-                                  : const Color(0xFF4B5563),
+                                  ? Colors.white54
+                                  : const Color(0xFF6B7280),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // + Share button
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.mediumImpact();
+                      FeedTab.openCompose(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF14B8A6),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(LucideIcons.plus,
+                              color: Colors.white, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Share',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
                             ),
                           ),
                         ],
@@ -215,27 +236,26 @@ class _SegmentedTabBar extends StatelessWidget {
     final AppResponsiveInfo responsive = context.responsive;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final trackColor = isDark
-      ? Colors.white.withValues(alpha: 0.08)
-        : const Color(0xFFE9EBF2);
+        ? Colors.white.withValues(alpha: 0.08)
+        : const Color(0xFFF0F1F5);
+    final selectedColor = isDark ? const Color(0xFF1E1E2E) : Colors.white;
 
     return Container(
-      height: responsive.space(44, minScale: 1, maxScale: 1.12),
-      padding: EdgeInsets.all(
-        responsive.space(4, minScale: 1, maxScale: 1.08),
-      ),
+      height: 44,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: trackColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: TabBar(
         controller: controller,
         indicator: BoxDecoration(
-          borderRadius: BorderRadius.circular(11),
-          gradient: CommunityDecor.fabGradient,
+          borderRadius: BorderRadius.circular(9),
+          color: selectedColor,
           boxShadow: [
             BoxShadow(
-              color: CommunityDecor.lavender.withValues(alpha: 0.35),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
@@ -247,12 +267,30 @@ class _SegmentedTabBar extends StatelessWidget {
             GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14),
         unselectedLabelStyle:
             GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 14),
-        labelColor: Colors.white,
+        labelColor: isDark ? Colors.white : const Color(0xFF111827),
         unselectedLabelColor:
-            isDark ? Colors.white54 : const Color(0xFF6B7280),
+            isDark ? Colors.white38 : const Color(0xFF9CA3AF),
         tabs: const [
-          Tab(text: 'Feed'),
-          Tab(text: 'Groups'),
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(LucideIcons.messageCircle, size: 15),
+                SizedBox(width: 6),
+                Text('Feed'),
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(LucideIcons.users, size: 15),
+                SizedBox(width: 6),
+                Text('Groups'),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -346,7 +384,12 @@ class _GradientFab extends StatelessWidget {
     )
         .animate(key: ValueKey(idx))
         .fadeIn(duration: 200.ms)
-        .slideY(begin: 0.25, end: 0, duration: 250.ms, curve: Curves.easeOut);
+        .slideY(begin: 0.25, end: 0, duration: 250.ms, curve: Curves.easeOut)
+        .shimmer(
+          delay: 1000.ms,
+          duration: 2000.ms,
+          color: Colors.white.withValues(alpha: 0.15),
+        );
   }
 }
 

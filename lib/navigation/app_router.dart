@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import 'package:upheal/screens/settings_screen.dart';
+import 'package:upheal/screens/signup_screen.dart';
 
 import '../avatar/ui/avatar_screen.dart';
+import '../features/onboarding/screens/onboarding_screen.dart';
 import '../features/community/data/community_models.dart';
 import '../features/community/services/community_repository.dart';
 import '../features/community/state/community_notifiers.dart';
@@ -28,9 +31,8 @@ import '../screens/my_assessment_screen.dart';
 import '../screens/notification_settings_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/roadmap_screen.dart';
-import '../screens/settings_screen.dart';
-import '../screens/signup_screen.dart';
 import '../screens/sleep_tracker_screen.dart';
+import '../screens/streak_screen.dart';
 import '../features/steps/ui/screens/step_tracker_screen.dart';
 import '../screens/welcome_screen.dart';
 import '../services/challenge_service.dart';
@@ -67,6 +69,15 @@ class AppRouter {
             AppRouteTransitions.buildPage<void>(
           state: state,
           child: const WelcomeScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/onboarding-flow',
+        name: 'onboarding-flow',
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            AppRouteTransitions.buildPage<void>(
+          state: state,
+          child: const OnboardingScreen(),
         ),
       ),
       GoRoute(
@@ -356,6 +367,15 @@ class AppRouter {
                     AppRouteTransitions.buildPage<void>(
                   state: state,
                   child: const BadgesScreen(),
+                ),
+              ),
+              GoRoute(
+                path: StreakRoute.path,
+                name: StreakRoute.name,
+                pageBuilder: (BuildContext context, GoRouterState state) =>
+                    AppRouteTransitions.buildPage<void>(
+                  state: state,
+                  child: const StreakScreen(),
                 ),
               ),
               GoRoute(

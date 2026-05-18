@@ -99,6 +99,10 @@ class MainActivity: FlutterActivity() {
         // 🔹 Check Device Admin status after Flutter is initialized (non-blocking)
         checkAndRequestDeviceAdmin()
 
+        // Initialize Health Data Handler (Samsung Health & Health Connect)
+        val healthDataHandler = HealthDataHandler(this)
+        healthDataHandler.registerWith(flutterEngine)
+
         // ✅ 1. تهيئة الـ EventChannel لمنع الكراش الخاص بـ Threat Monitor
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, "com.mindquest/security_events")
             .setStreamHandler(object : EventChannel.StreamHandler {

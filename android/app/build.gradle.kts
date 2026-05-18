@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.flutter_my_app_main"
-        minSdk = flutter.minSdkVersion
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -78,4 +78,7 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // Health Connect SDK
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
 }

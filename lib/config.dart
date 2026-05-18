@@ -23,6 +23,6 @@ const String SUPABASE_ANON_KEY = String.fromEnvironment(
 // API Configuration
 const String API_BASE_URL = String.fromEnvironment(
         'UPHEAL_API_URL',
-        defaultValue: 'http://192.168.1.3:8000',
+        defaultValue: 'http://172.16.26.61:8000',
 );
 

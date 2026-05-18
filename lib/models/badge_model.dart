@@ -10,7 +10,7 @@ class BadgeModel {
   final String description;
 
   /// Asset path for the badge icon (png/jpg/etc). If missing, UI should fall back.
-  final String iconPath;
+  final String? iconPath;
 
   final BadgeStatus status;
 
@@ -23,7 +23,7 @@ class BadgeModel {
     required this.id,
     required this.title,
     required this.description,
-    required this.iconPath,
+    this.iconPath,
     required this.status,
     required this.requiredValue,
     this.unlockedAt,
@@ -78,7 +78,6 @@ class DefaultBadges {
       id: 'streak_3',
       title: 'Warm-up',
       description: 'Keep your streak for 3 days.',
-      iconPath: 'assets/badges/streak_3.png',
       status: BadgeStatus.locked,
       requiredValue: 3,
     ),
@@ -86,7 +85,6 @@ class DefaultBadges {
       id: 'streak_7',
       title: 'Week Warrior',
       description: '7 days of consistency.',
-      iconPath: 'assets/badges/streak_7.png',
       status: BadgeStatus.locked,
       requiredValue: 7,
     ),
@@ -94,15 +92,13 @@ class DefaultBadges {
       id: 'streak_14',
       title: 'Habit Builder',
       description: '14 days strong — habits forming.',
-      iconPath: 'assets/badges/streak_14.png',
       status: BadgeStatus.locked,
       requiredValue: 14,
     ),
     BadgeModel(
       id: 'streak_30',
       title: 'Month Master',
-      description: '30 days — you’re rewriting your story.',
-      iconPath: 'assets/badges/streak_30.png',
+      description: '30 days — you\'re rewriting your story.',
       status: BadgeStatus.locked,
       requiredValue: 30,
     ),
@@ -112,7 +108,6 @@ class DefaultBadges {
       id: 'tasks_5',
       title: 'Getting Started',
       description: 'Complete 5 tasks.',
-      iconPath: 'assets/badges/tasks_5.png',
       status: BadgeStatus.locked,
       requiredValue: 5,
     ),
@@ -120,7 +115,6 @@ class DefaultBadges {
       id: 'tasks_20',
       title: 'Momentum',
       description: 'Complete 20 tasks.',
-      iconPath: 'assets/badges/tasks_20.png',
       status: BadgeStatus.locked,
       requiredValue: 20,
     ),
@@ -128,7 +122,6 @@ class DefaultBadges {
       id: 'tasks_50',
       title: 'Unstoppable',
       description: 'Complete 50 tasks.',
-      iconPath: 'assets/badges/tasks_50.png',
       status: BadgeStatus.locked,
       requiredValue: 50,
     ),
@@ -138,7 +131,6 @@ class DefaultBadges {
       id: 'free_3',
       title: '3 Days Clean',
       description: '3 addiction-free days.',
-      iconPath: 'assets/badges/free_3.png',
       status: BadgeStatus.locked,
       requiredValue: 3,
     ),
@@ -146,7 +138,6 @@ class DefaultBadges {
       id: 'free_7',
       title: '1 Week Clean',
       description: '7 addiction-free days.',
-      iconPath: 'assets/badges/free_7.png',
       status: BadgeStatus.locked,
       requiredValue: 7,
     ),
@@ -154,7 +145,6 @@ class DefaultBadges {
       id: 'free_30',
       title: '30 Days Clean',
       description: '30 addiction-free days.',
-      iconPath: 'assets/badges/free_30.png',
       status: BadgeStatus.locked,
       requiredValue: 30,
     ),

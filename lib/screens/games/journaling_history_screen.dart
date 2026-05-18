@@ -49,9 +49,9 @@ class _JournalingHistoryScreenState extends State<JournalingHistoryScreen> {
   List<JournalEntry> _filtered(List<JournalEntry> entries) {
     if (_query.isEmpty) return entries;
     return entries.where((e) {
-      final answersText = e.answers.map((a) => '${a.question} ${a.answer}').join(' ').toLowerCase();
-      final moodText = (e.mood ?? '').toLowerCase();
-      return answersText.contains(_query) || moodText.contains(_query);
+      final entryText = e.entryText.toLowerCase();
+      final moodText = (e.moodLabel ?? '').toLowerCase();
+      return entryText.contains(_query) || moodText.contains(_query);
     }).toList();
   }
 
@@ -204,8 +204,8 @@ class _HistoryCardState extends State<_HistoryCard> {
     final e = widget.entry;
     final isDark = widget.isDark;
     final dateStr = _dateLabel(e.date);
-    final preview = e.answers.isNotEmpty ? e.answers.first.answer : '';
-    final moodEmoji = _moodEmoji(e.mood);
+    final preview = e.entryText;
+    final moodEmoji = _moodEmoji(e.moodLabel);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -235,8 +235,8 @@ class _HistoryCardState extends State<_HistoryCard> {
                       style: GoogleFonts.inter(
                         fontSize: 14, fontWeight: FontWeight.w600,
                         color: isDark ? Colors.white : AppColors.textPrimary)),
-                    if (e.mood != null)
-                      Text(e.mood!,
+                    if (e.moodLabel != null)
+                      Text(e.moodLabel!,
                         style: GoogleFonts.inter(
                           fontSize: 12, color: isDark ? Colors.white54 : _hiGray)),
                   ]),
@@ -269,23 +269,7 @@ class _HistoryCardState extends State<_HistoryCard> {
                 overflow: _expanded ? null : TextOverflow.ellipsis),
 
               if (_expanded) ...[
-                // Remaining Q&As
-                if (e.answers.length > 1) ...[
-                  const SizedBox(height: 14),
-                  ...e.answers.skip(1).map((qa) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(qa.question,
-                        style: GoogleFonts.inter(
-                          fontSize: 11, fontWeight: FontWeight.w600, color: _hiTeal)),
-                      const SizedBox(height: 4),
-                      Text(qa.answer,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: isDark ? Colors.white70 : _hiGray, height: 1.55)),
-                    ]),
-                  )),
-                ],
+
                 Divider(
                   color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.06),
                   height: 20),

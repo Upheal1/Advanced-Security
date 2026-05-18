@@ -1,34 +1,21 @@
-import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
 import '../models/notification_types.dart';
 
 class NotificationService {
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
-  // Notification channel IDs for usage limits
-  static const String _usageWarningChannelId = 'usage_warnings';
-  static const String _usageLimitChannelId = 'usage_limits';
-  static const String _dailySummaryChannelId = 'daily_summary';
-  static const String _achievementChannelId = 'achievements';
-
-  // Notification IDs
-  static const int _warningBaseId = 5000;
-  static const int _limitBaseId = 6000;
-  static const int _summaryId = 7000;
-  static const int _achievementBaseId = 8000;
-
-  // Callback for handling notification taps
   static Function(NotificationPayload)? onNotificationTap;
 
   static Future<void> initialize() async {
-    // Initialize timezone database (for scheduled notifications)
-    tz.initializeTimeZones();
+    tz_data.initializeTimeZones();
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -36,6 +23,7 @@ class NotificationService {
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
+
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
@@ -44,211 +32,61 @@ class NotificationService {
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
-      onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationResponse,
     );
+
     await _requestPermissions();
-    await _createNotificationChannels();
-  }
-
-  /// Handle notification response (tap)
-  static void _onNotificationResponse(NotificationResponse response) {
-    if (response.payload == null) return;
-
-    try {
-      final json = jsonDecode(response.payload!);
-      final payload = NotificationPayload.fromJson(json);
-      onNotificationTap?.call(payload);
-      debugPrint('Notification tapped: ${payload.type}');
-    } catch (e) {
-      debugPrint('Error parsing notification payload: $e');
-    }
-  }
-
-  /// Handle background notification response
-  @pragma('vm:entry-point')
-  static void _onBackgroundNotificationResponse(NotificationResponse response) {
-    debugPrint('Background notification response: ${response.payload}');
-  }
-
-  static Future<void> _createNotificationChannels() async {
-    // Create notification channels
-    const blockedAppsChannel = AndroidNotificationChannel(
-      'blocked_apps',
-      'Blocked Apps',
-      description: 'Notifications when blocked apps are accessed',
-      importance: Importance.high,
-    );
-
-    const focusStartChannel = AndroidNotificationChannel(
-      'focus_channel',
-      'Focus Mode',
-      description: 'Notifications for focus mode start',
-      importance: Importance.high,
-    );
-
-    const focusCompleteChannel = AndroidNotificationChannel(
-      'focus_complete',
-      'Focus Complete',
-      description: 'Focus completion notifications',
-      importance: Importance.high,
-    );
-
-    const streakChannel = AndroidNotificationChannel(
-      'streak_channel',
-      'Focus Streaks',
-      description: 'Focus streak notifications',
-      importance: Importance.defaultImportance,
-    );
-
-    const dailyJournalChannel = AndroidNotificationChannel(
-      'daily_journal',
-      'Daily Journal Reminder',
-      description: 'Daily reminder to write your journal',
-      importance: Importance.high,
-    );
-
-    // Usage limit notification channels
-    const usageWarningChannel = AndroidNotificationChannel(
-      _usageWarningChannelId,
-      'Usage Warnings',
-      description: 'Notifications for approaching app usage limits',
-      importance: Importance.high,
-    );
-
-    const usageLimitChannel = AndroidNotificationChannel(
-      _usageLimitChannelId,
-      'Usage Limits',
-      description: 'Notifications when app usage limit is reached',
-      importance: Importance.max,
-    );
-
-    const dailySummaryChannel = AndroidNotificationChannel(
-      _dailySummaryChannelId,
-      'Daily Summary',
-      description: 'Daily screen time summary notifications',
-      importance: Importance.defaultImportance,
-    );
-
-    const achievementChannel = AndroidNotificationChannel(
-      _achievementChannelId,
-      'Achievements',
-      description: 'Achievement and reward notifications',
-      importance: Importance.high,
-    );
-
-    final androidPlugin = _notifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-
-    await androidPlugin?.createNotificationChannel(blockedAppsChannel);
-    await androidPlugin?.createNotificationChannel(focusStartChannel);
-    await androidPlugin?.createNotificationChannel(focusCompleteChannel);
-    await androidPlugin?.createNotificationChannel(streakChannel);
-    await androidPlugin?.createNotificationChannel(dailyJournalChannel);
-    await androidPlugin?.createNotificationChannel(usageWarningChannel);
-    await androidPlugin?.createNotificationChannel(usageLimitChannel);
-    await androidPlugin?.createNotificationChannel(dailySummaryChannel);
-    await androidPlugin?.createNotificationChannel(achievementChannel);
   }
 
   static Future<void> _requestPermissions() async {
-    // iOS permissions (Android controlled via system app settings)
-    final iosPlugin = _notifications
-        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-    await iosPlugin?.requestPermissions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    // Android 13+ notification permission
-    if (Platform.isAndroid) {
-      final androidPlugin = _notifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.requestNotificationsPermission();
-    }
+    final android = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestNotificationsPermission();
   }
 
-  /// Request notification permissions (public method)
-  static Future<bool> requestPermissions() async {
-    try {
-      if (Platform.isIOS) {
-        final iosPlugin = _notifications
-            .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-        final result = await iosPlugin?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-        return result ?? false;
-      } else if (Platform.isAndroid) {
-        final androidPlugin = _notifications
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>();
-        final result = await androidPlugin?.requestNotificationsPermission();
-        return result ?? false;
+  static void _onNotificationResponse(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload != null) {
+      final parts = payload.split(':');
+      if (parts.isNotEmpty) {
+        final type = parts[0];
+        final appName = parts.length > 1 ? parts[1] : '';
+        onNotificationTap?.call(NotificationPayload(
+          type: _parseType(type),
+          appName: appName,
+        ));
       }
-      return true;
-    } catch (e) {
-      debugPrint('Error requesting permissions: $e');
-      return false;
     }
   }
 
-  /// Check if notifications are enabled
-  static Future<bool> areNotificationsEnabled() async {
-    if (Platform.isAndroid) {
-      final androidPlugin = _notifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-      return await androidPlugin?.areNotificationsEnabled() ?? false;
+  static NotificationType _parseType(String type) {
+    switch (type) {
+      case 'warning':
+        return NotificationType.warning;
+      case 'limit':
+        return NotificationType.limit;
+      case 'summary':
+        return NotificationType.summary;
+      case 'achievement':
+        return NotificationType.achievement;
+      default:
+        return NotificationType.info;
     }
-    return true;
   }
 
-  // ==================== Usage Limit Notifications ====================
-
-  /// Schedule a warning notification for approaching limit
-  static Future<void> scheduleWarningNotification({
-    required String appName,
-    required int minutesRemaining,
-    int percentUsed = 80,
+  static Future<void> showNotification({
+    int? id,
+    required String title,
+    required String body,
+    String? payload,
   }) async {
-    // Check if notifications are enabled in settings
-    final settings = await _getNotificationSettings();
-    if (!settings.enabled || !settings.warningsEnabled) return;
-
-    final id = _warningBaseId + appName.hashCode.abs() % 1000;
+    final notificationId = id ?? DateTime.now().millisecondsSinceEpoch % 100000;
     
-    final payload = NotificationPayload(
-      type: NotificationType.warning,
-      appName: appName,
-      data: {'minutesRemaining': minutesRemaining, 'percentUsed': percentUsed},
-    );
-
-    String title;
-    String body;
-    
-    if (percentUsed >= 95) {
-      title = '⚠️ Almost at limit!';
-      body = '$appName: Only $minutesRemaining minutes remaining';
-    } else if (percentUsed >= 90) {
-      title = '⏰ 90% of limit used';
-      body = '$appName: $minutesRemaining minutes left today';
-    } else {
-      title = '📊 80% of limit used';
-      body = '$appName: $minutesRemaining minutes remaining';
-    }
-
-    final androidDetails = AndroidNotificationDetails(
-      _usageWarningChannelId,
-      'Usage Warnings',
-      channelDescription: 'Notifications for approaching app usage limits',
+    const androidDetails = AndroidNotificationDetails(
+      'upheal_main',
+      'UpHeal Notifications',
+      channelDescription: 'Main notifications for UpHeal',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFFFF9800),
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -257,46 +95,29 @@ class NotificationService {
       presentSound: true,
     );
 
-    final notificationDetails = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _notifications.show(
-      id,
+      notificationId,
       title,
       body,
-      notificationDetails,
-      payload: jsonEncode(payload.toJson()),
+      details,
+      payload: payload,
     );
   }
 
-  /// Show a notification when limit is reached
   static Future<void> showLimitReachedNotification({
     required String appName,
   }) async {
-    // Check if notifications are enabled in settings
-    final settings = await _getNotificationSettings();
-    if (!settings.enabled || !settings.limitsEnabled) return;
-
-    final id = _limitBaseId + appName.hashCode.abs() % 1000;
-    
-    final payload = NotificationPayload(
-      type: NotificationType.limit,
-      appName: appName,
-      data: {'limitReached': true},
-    );
-
-    final androidDetails = AndroidNotificationDetails(
-      _usageLimitChannelId,
+    const androidDetails = AndroidNotificationDetails(
+      'upheal_limits',
       'Usage Limits',
-      channelDescription: 'Notifications when app usage limit is reached',
-      importance: Importance.max,
-      priority: Priority.max,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFFF44336),
-      ongoing: true,
-      autoCancel: false,
+      channelDescription: 'Notifications when app usage limits are reached',
+      importance: Importance.high,
+      priority: Priority.high,
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -305,82 +126,30 @@ class NotificationService {
       presentSound: true,
     );
 
-    final notificationDetails = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _notifications.show(
-      id,
-      '🚫 Time Limit Reached',
-      'Your daily limit for $appName has been reached. Take a break!',
-      notificationDetails,
-      payload: jsonEncode(payload.toJson()),
+      2001,
+      '⛔ Limit Reached',
+      'You\'ve reached your daily limit for $appName',
+      details,
+      payload: 'limit:$appName',
     );
   }
 
-  /// Schedule daily summary notification
-  static Future<void> scheduleDailySummary({
-    required DateTime scheduledTime,
-    required Map<String, int> usageData,
+  static Future<void> showFiveMinuteWarning({
+    required String appName,
+    int? remainingMinutes,
   }) async {
-    // Check if notifications are enabled in settings
-    final settings = await _getNotificationSettings();
-    if (!settings.enabled || !settings.summaryEnabled) return;
-
-    // Cancel any existing daily summary
-    await _notifications.cancel(_summaryId);
-
-    final totalMinutes = usageData.values.fold<int>(0, (sum, v) => sum + v);
-    final hours = totalMinutes ~/ 60;
-    final minutes = totalMinutes % 60;
-    
-    String timeString;
-    if (hours > 0) {
-      timeString = '${hours}h ${minutes}m';
-    } else {
-      timeString = '${minutes}m';
-    }
-
-    final topApps = usageData.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final topApp = topApps.isNotEmpty ? topApps.first.key : 'No apps';
-
-    final payload = NotificationPayload(
-      type: NotificationType.summary,
-      data: {'totalMinutes': totalMinutes},
-    );
-
-    // Schedule for the specified time
-    final now = DateTime.now();
-    var scheduledDateTime = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      scheduledTime.hour,
-      scheduledTime.minute,
-    );
-
-    // If the time has passed today, schedule for tomorrow
-    if (scheduledDateTime.isBefore(now)) {
-      scheduledDateTime = scheduledDateTime.add(const Duration(days: 1));
-    }
-
-    final tzScheduledDate = tz.TZDateTime.from(scheduledDateTime, tz.local);
-
-    final androidDetails = AndroidNotificationDetails(
-      _dailySummaryChannelId,
-      'Daily Summary',
-      channelDescription: 'Daily screen time summary notifications',
+    const androidDetails = AndroidNotificationDetails(
+      'upheal_warnings',
+      'Usage Warnings',
+      channelDescription: 'Warning notifications about app usage',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFF2196F3),
-      styleInformation: BigTextStyleInformation(
-        'Total screen time: $timeString\n'
-        'Most used app: $topApp\n'
-        'Apps used: ${usageData.length}',
-      ),
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -389,55 +158,116 @@ class NotificationService {
       presentSound: true,
     );
 
-    final notificationDetails = NotificationDetails(
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    final minutes = remainingMinutes ?? 5;
+    await _notifications.show(
+      2002,
+      '⚠️ Time Running Out',
+      '$minutes minutes remaining for $appName',
+      details,
+      payload: 'warning:$appName',
+    );
+  }
+
+  static Future<void> scheduleWarningNotification({
+    int? id,
+    required String appName,
+    DateTime? scheduledTime,
+    int? warningThreshold,
+    int? minutesRemaining,
+    int? percentUsed,
+  }) async {
+    final notificationId = id ?? appName.hashCode.abs() % 100000;
+    final scheduled = scheduledTime ?? DateTime.now().add(const Duration(minutes: 1));
+    final threshold = warningThreshold ?? 80;
+
+    const androidDetails = AndroidNotificationDetails(
+      'upheal_warnings',
+      'Usage Warnings',
+      channelDescription: 'Warning notifications about app usage',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _notifications.zonedSchedule(
-      _summaryId,
-      '📱 Daily Screen Time Summary',
-      'Today: $timeString • Most used: $topApp',
-      tzScheduledDate,
-      notificationDetails,
+      notificationId,
+      '⚠️ Approaching Limit',
+      'You\'ve used $threshold% of your $appName limit',
+      tz.TZDateTime.from(scheduled, tz.local),
+      details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: jsonEncode(payload.toJson()),
+      payload: 'warning:$appName',
     );
-
-    debugPrint('Daily summary scheduled for ${scheduledDateTime.toString()}');
   }
 
-  /// Show achievement notification
-  static Future<void> showAchievementNotification({
-    required String achievement,
-    required int xpGained,
-    String? description,
+  static Future<void> scheduleDailySummary({
+    int? id,
+    required DateTime scheduledTime,
+    Map<String, int>? usageData,
   }) async {
-    // Check if notifications are enabled in settings
-    final settings = await _getNotificationSettings();
-    if (!settings.enabled || !settings.achievementsEnabled) return;
+    final notificationId = id ?? 5001;
 
-    final id = _achievementBaseId + DateTime.now().millisecondsSinceEpoch % 1000;
-    
-    final payload = NotificationPayload(
-      type: NotificationType.achievement,
-      data: {'achievement': achievement, 'xpGained': xpGained},
+    const androidDetails = AndroidNotificationDetails(
+      'upheal_summary',
+      'Daily Summary',
+      channelDescription: 'Daily usage summary notifications',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
     );
 
-    final androidDetails = AndroidNotificationDetails(
-      _achievementChannelId,
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.zonedSchedule(
+      notificationId,
+      '📊 Daily Summary',
+      'Tap to see your daily screen time summary',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: 'summary:',
+    );
+  }
+
+  static Future<void> showAchievementNotification({
+    String? title,
+    String? body,
+    String? achievement,
+    int? xpGained,
+    String? description,
+  }) async {
+    final notificationTitle = title ?? 'Achievement Unlocked!';
+    final notificationBody = body ?? description ?? 'Great job!';
+
+    const androidDetails = AndroidNotificationDetails(
+      'upheal_achievements',
       'Achievements',
       channelDescription: 'Achievement and reward notifications',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFFFFC107),
-      styleInformation: description != null
-          ? BigTextStyleInformation(
-              '$achievement\n$description\n\nYou earned $xpGained XP!',
-            )
-          : null,
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -446,55 +276,30 @@ class NotificationService {
       presentSound: true,
     );
 
-    final notificationDetails = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _notifications.show(
-      id,
-      '🏆 Achievement Unlocked!',
-      '$achievement • +$xpGained XP',
-      notificationDetails,
-      payload: jsonEncode(payload.toJson()),
+      3001,
+      '🏆 $notificationTitle',
+      notificationBody,
+      details,
+      payload: 'achievement:$notificationTitle',
     );
   }
 
-  /// Show 5-minute warning notification
-  static Future<void> showFiveMinuteWarning({required String appName}) async {
-    await scheduleWarningNotification(
-      appName: appName,
-      minutesRemaining: 5,
-      percentUsed: 95,
-    );
-  }
-
-  /// Show focus session notification (start, complete, break)
   static Future<void> showFocusSessionNotification({
     required String title,
     required String body,
   }) async {
-    // Check if notifications are enabled in settings
-    final settings = await _getNotificationSettings();
-    if (!settings.enabled) return;
-
-    final id = 4000 + DateTime.now().millisecondsSinceEpoch % 1000;
-    
-    final payload = NotificationPayload(
-      type: NotificationType.info,
-      data: {'focusSession': true},
-    );
-
     const androidDetails = AndroidNotificationDetails(
-      'focus_complete',
-      'Focus Complete',
+      'upheal_focus',
+      'Focus Sessions',
       channelDescription: 'Focus session notifications',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: Color(0xFF7C3AED),
-      playSound: true,
-      enableVibration: true,
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -503,225 +308,58 @@ class NotificationService {
       presentSound: true,
     );
 
-    final notificationDetails = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _notifications.show(
-      id,
+      3002,
       title,
       body,
-      notificationDetails,
-      payload: jsonEncode(payload.toJson()),
+      details,
+      payload: 'focus:session',
     );
   }
 
-  /// Cancel notifications for a specific app
-  static Future<void> cancelAppNotifications(String appName) async {
-    final warningId = _warningBaseId + appName.hashCode.abs() % 1000;
-    final limitId = _limitBaseId + appName.hashCode.abs() % 1000;
-    await _notifications.cancel(warningId);
-    await _notifications.cancel(limitId);
+  static Future<bool> areNotificationsEnabled() async {
+    final android = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.areNotificationsEnabled() ?? false;
   }
 
-  /// Cancel all notifications
+  static Future<bool> requestPermissions() async {
+    final android = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final result = await android?.requestNotificationsPermission();
+    return result ?? false;
+  }
+
+  static Future<void> cancelNotification(int id) async {
+    await _notifications.cancel(id);
+  }
+
   static Future<void> cancelAllNotifications() async {
     await _notifications.cancelAll();
   }
 
-  /// Get notification settings from SharedPreferences
-  static Future<NotificationSettings> _getNotificationSettings() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final settingsJson = prefs.getString('notification_settings');
-      if (settingsJson != null) {
-        final json = jsonDecode(settingsJson);
-        return NotificationSettings.fromJson(json);
-      }
-    } catch (e) {
-      debugPrint('Error loading notification settings: $e');
-    }
-    return NotificationSettings();
-  }
-
-  /// Get pending notifications
-  static Future<List<PendingNotificationRequest>> getPendingNotifications() async {
-    return await _notifications.pendingNotificationRequests();
-  }
-
-  // ==================== Original Notification Methods ====================
-
-  /// Schedule a daily notification at 22:00 local time (production mode).
-  static Future<void> scheduleDailyJournalReminder() async {
-    // Cancel any existing notification with this ID to avoid duplicates
-    await _notifications.cancel(2000);
-    
-    final now = tz.TZDateTime.now(tz.local);
-    // Next 22:00 local
-    var scheduled =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, 22, 0);
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
+  static Future<void> scheduleNotification({
+    int? id,
+    required String title,
+    required String body,
+    DateTime? scheduledTime,
+    DateTime? scheduledDate,
+    String? payload,
+  }) async {
+    final notificationId = id ?? DateTime.now().millisecondsSinceEpoch % 100000;
+    final scheduled = scheduledTime ?? scheduledDate ?? DateTime.now().add(const Duration(hours: 1));
 
     const androidDetails = AndroidNotificationDetails(
-      'daily_journal',
-      'Daily Journal Reminder',
-      channelDescription: 'Daily reminder to write your UpHeal journal',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: Color(0xFF6B46C1),
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    // Daily schedule at 22:00 local time.
-    await _notifications.zonedSchedule(
-  2000, // id
-  '📝 Evening Reflection',
-  '🌿 Your journal is here whenever you\'re ready.',
-  scheduled, // MUST be tz.TZDateTime
-  notificationDetails,
-  androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-  matchDateTimeComponents: DateTimeComponents.time,
-  payload: 'evening_reflection',
-);
-    print('Scheduled daily journal reminder for $scheduled (local time: ${now.hour}:${now.minute.toString().padLeft(2, '0')})');
-  }
-
-  /// Debug helper: show a test notification after a short delay (no scheduling).
-  static Future<void> debugOneShotTestAfter(Duration delay) async {
-    await Future.delayed(delay);
-    await showTestNotification();
-  }
-
-  /// Helper for manual testing: show an immediate notification.
-  static Future<void> showTestNotification() async {
-    final androidDetails = AndroidNotificationDetails(
-      'focus_channel',
-      'Focus Mode',
-      channelDescription: 'Notifications for focus mode',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFF6B46C1),
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      9999,
-      'Test Notification',
-      'If you see this, notifications are working.',
-      notificationDetails,
-    );
-  }
-
-  static Future<void> showFocusStartNotification() async {
-    final androidDetails = AndroidNotificationDetails(
-      'focus_channel',
-      'Focus Mode',
-      channelDescription: 'Notifications for focus mode',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFF6B46C1),
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      1,
-      '🎯 Focus Mode Started',
-      'Stay focused! Your blocked apps are now restricted.',
-      notificationDetails,
-    );
-  }
-
-  static Future<void> showFocusCompleteNotification(int xpEarned) async {
-    final androidDetails = AndroidNotificationDetails(
-      'focus_complete',
-      'Focus Complete',
-      channelDescription: 'Focus completion notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFF45D9A8),
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      2,
-      '🎉 Focus Session Complete!',
-      'Great job! You earned $xpEarned XP!',
-      notificationDetails,
-    );
-  }
-
-  static Future<void> showStreakNotification(int streak) async {
-    final androidDetails = AndroidNotificationDetails(
-      'streak_channel',
-      'Focus Streaks',
-      channelDescription: 'Focus streak notifications',
+      'upheal_reminders',
+      'UpHeal Reminders',
+      channelDescription: 'Reminder notifications',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFF6B46C1),
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      3,
-      '🔥 Focus Streak!',
-      'Amazing! You have a $streak day focus streak!',
-      notificationDetails,
-    );
-  }
-
-  static Future<void> showBlockedAppNotification(String appName) async {
-    final androidDetails = AndroidNotificationDetails(
-      'blocked_apps',
-      'Blocked Apps',
-      channelDescription: 'Notifications when blocked apps are accessed',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFF6B46C1),
-    );
-
-    final notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notifications.show(
-      999,
-      '🚫 App Blocked During Focus',
-      'You tried to open $appName! Stay focused! 💪',
-      notificationDetails,
-    );
-  }
-
-  /// Show a generic notification immediately
-  static Future<void> showNotification({
-    required int id,
-    required String title,
-    required String body,
-    String? channelId,
-    String? payload,
-  }) async {
-    final settings = await _getNotificationSettings();
-    if (!settings.enabled) return;
-
-    final androidDetails = AndroidNotificationDetails(
-      channelId ?? 'streak_channel',
-      'Streak Notifications',
-      channelDescription: 'Notifications for streak reminders and achievements',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFFFF6B35),
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -730,70 +368,118 @@ class NotificationService {
       presentSound: true,
     );
 
-    final notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _notifications.show(
-      id,
-      title,
-      body,
-      notificationDetails,
-      payload: payload,
-    );
-  }
-
-  /// Schedule a notification for a specific time
-  static Future<void> scheduleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-    String? channelId,
-    String? payload,
-  }) async {
-    final settings = await _getNotificationSettings();
-    if (!settings.enabled) return;
-
-    final tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
-
-    final androidDetails = AndroidNotificationDetails(
-      channelId ?? 'streak_channel',
-      'Streak Notifications',
-      channelDescription: 'Notifications for streak reminders and achievements',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      color: const Color(0xFFFF6B35),
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    final notificationDetails = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _notifications.zonedSchedule(
-      id,
+      notificationId,
       title,
       body,
-      tzScheduledDate,
-      notificationDetails,
+      tz.TZDateTime.from(scheduled, tz.local),
+      details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: payload,
     );
-
-    debugPrint('Notification $id scheduled for $scheduledDate');
   }
 
-  /// Cancel a specific notification by ID
-  static Future<void> cancelNotification(int id) async {
-    await _notifications.cancel(id);
+  static Future<void> scheduleStreakReminder({
+    int? id,
+    required DateTime scheduledTime,
+  }) async {
+    final notificationId = id ?? 4001;
+
+    const androidDetails = AndroidNotificationDetails(
+      'upheal_streaks',
+      'Streak Reminders',
+      channelDescription: 'Streak reminder notifications',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.zonedSchedule(
+      notificationId,
+      '🔥 Keep Your Streak!',
+      'Don\'t break your wellness streak - check in today!',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: 'streak:reminder',
+    );
+  }
+}
+
+class UpHealNotificationService {
+  static final UpHealNotificationService _instance = UpHealNotificationService._internal();
+  factory UpHealNotificationService() => _instance;
+  UpHealNotificationService._internal();
+
+  Future<void> initialize() async {
+    await NotificationService.initialize();
+  }
+
+  Future<void> showStreakReminder({required int streakDays}) async {
+    final body = streakDays > 0
+        ? 'You\'re on a $streakDays day streak! Don\'t break it today.'
+        : 'Start your wellness journey today!';
+    await NotificationService.showNotification(
+      title: '🔥 Keep Your Streak Going!',
+      body: body,
+      payload: 'streak:$body',
+    );
+  }
+
+  Future<void> showMotivationalMessage() async {
+    final messages = [
+      'Every step forward is progress. Keep going! 🌟',
+      'Your mental wellness journey is unique. Be patient with yourself. 💜',
+      'Small daily improvements lead to stunning results. 📈',
+    ];
+    final random = DateTime.now().millisecondsSinceEpoch % messages.length;
+    await NotificationService.showNotification(
+      title: '💭 Daily Inspiration',
+      body: messages[random],
+      payload: 'motivational:${messages[random]}',
+    );
+  }
+
+  Future<void> showFocusSessionComplete({
+    required int minutes,
+    required int xpEarned,
+  }) async {
+    await NotificationService.showFocusSessionNotification(
+      title: '🎯 Focus Session Complete!',
+      body: 'Great job! You focused for $minutes minutes and earned $xpEarned XP.',
+    );
+  }
+
+  Future<void> showAchievementUnlocked({
+    required String title,
+    required String description,
+  }) async {
+    await NotificationService.showAchievementNotification(
+      title: title,
+      body: description,
+    );
+  }
+
+  Future<void> showLevelUp({required int newLevel}) async {
+    await NotificationService.showNotification(
+      title: '⬆️ Level Up!',
+      body: 'Congratulations! You\'ve reached Level $newLevel. Keep growing!',
+      payload: 'level_up:$newLevel',
+    );
   }
 }

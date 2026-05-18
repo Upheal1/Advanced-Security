@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../constants/app_colors.dart';
+
 /// Shared calm / premium visuals for the UpHeal community surfaces.
 class CommunityDecor {
   CommunityDecor._();
 
-  // ── Brand palette ──────────────────────────────────────────────────────────
-  static const Color lavender = Color(0xFF7C6EE6);
-  static const Color lavenderLight = Color(0xFFB4AEFF);
-  static const Color mint = Color(0xFF4ECDC4);
-  static const Color peach = Color(0xFFFF9A8B);
-  static const Color roseAccent = Color(0xFFFF6B9D);
-  static const Color warmGold = Color(0xFFFFD166);
+  // ── Brand palette (from AppColors) ───────────────────────────────────────────
+  static const Color lavender = AppColors.purple;
+  static const Color lavenderLight = AppColors.blue;
+  static const Color mint = AppColors.teal;
+  static const Color peach = AppColors.orange;
+  static const Color roseAccent = AppColors.pink;
+  static const Color warmGold = AppColors.warning;
 
   // ── Card / surface ─────────────────────────────────────────────────────────
 
@@ -19,15 +21,15 @@ class CommunityDecor {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return BoxDecoration(
       borderRadius: BorderRadius.circular(radius),
-      color: isDark ? const Color(0xFF1E2235) : Colors.white,
+      color: isDark ? AppColors.card : Colors.white,
       border: isDark
-          ? Border.all(color: Colors.white.withOpacity(0.07))
-          : Border.all(color: const Color(0xFFEEEFF4)),
+          ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+          : Border.all(color: AppColors.surface),
       boxShadow: isDark
           ? []
           : [
               BoxShadow(
-                color: const Color(0xFF6B7280).withOpacity(0.07),
+                color: AppColors.textMuted.withValues(alpha: 0.07),
                 blurRadius: 20,
                 offset: const Offset(0, 4),
               ),
@@ -39,9 +41,12 @@ class CommunityDecor {
     return BoxDecoration(
       borderRadius: BorderRadius.circular(999),
       gradient: LinearGradient(
-        colors: [lavender.withOpacity(0.18), mint.withOpacity(0.14)],
+        colors: [
+          AppColors.purple.withValues(alpha: 0.18),
+          AppColors.teal.withValues(alpha: 0.14),
+        ],
       ),
-      border: Border.all(color: lavender.withOpacity(0.22)),
+      border: Border.all(color: AppColors.purple.withValues(alpha: 0.22)),
     );
   }
 
@@ -53,13 +58,13 @@ class CommunityDecor {
       return const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF131722), Color(0xFF0F1320), Color(0xFF131722)],
+        colors: [AppColors.surfaceDark, Color(0xFF0A0A12), AppColors.surfaceDark],
       );
     }
     return const LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFFF8F9FF), Color(0xFFF1F4FF), Color(0xFFFAF8FF)],
+      colors: [AppColors.surface, Color(0xFFF1F4FF), Color(0xFFF8F9FF)],
     );
   }
 
@@ -69,13 +74,19 @@ class CommunityDecor {
       return LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [lavender.withOpacity(0.18), mint.withOpacity(0.10)],
+        colors: [
+          AppColors.purple.withValues(alpha: 0.20),
+          AppColors.teal.withValues(alpha: 0.12),
+        ],
       );
     }
     return LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [lavender.withOpacity(0.10), mint.withOpacity(0.07)],
+      colors: [
+        AppColors.purple.withValues(alpha: 0.12),
+        AppColors.teal.withValues(alpha: 0.08),
+      ],
     );
   }
 

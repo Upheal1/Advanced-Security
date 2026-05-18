@@ -38,6 +38,8 @@ class FeedTab extends StatefulWidget {
           backgroundColor: AppColors.purple,
         ),
       );
+      // Refresh the feed after posting
+      context.findAncestorStateOfType<_FeedTabState>()?._loadFeed();
     }
   }
 
@@ -55,7 +57,6 @@ class _FeedTabState extends State<FeedTab> {
   bool _misconfigured = false;
   bool _isGuest = false;
   String? _error;
-  bool _hasNewPosts = false;
   List<Map<String, dynamic>> _posts = [];
   FeedCursor? _nextCursor;
   bool _loadingMore = false;
@@ -102,7 +103,6 @@ class _FeedTabState extends State<FeedTab> {
     setState(() {
       _loading = true;
       _error = null;
-      _hasNewPosts = false;
       _nextCursor = null;
       _hasMore = true;
     });
@@ -161,7 +161,8 @@ class _FeedTabState extends State<FeedTab> {
       _feedChannel = await _repo.subscribeToFeedUpdates(
         onNewPostAvailable: () {
           if (!mounted) return;
-          setState(() => _hasNewPosts = true);
+          // Auto-refresh instead of just showing banner
+          _loadFeed();
         },
       );
     } catch (e) {
@@ -194,7 +195,6 @@ class _FeedTabState extends State<FeedTab> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         children: [
           if (_isGuest) _GuestBanner(onSignIn: () {}),
-          if (_hasNewPosts) _NewPostsBanner(onTap: _loadFeed),
           const _SupportBanner(),
           const SizedBox(height: 14),
           if (_posts.isEmpty)
@@ -335,6 +335,18 @@ class _FeedPostCard extends StatelessWidget {
   final Map<String, dynamic> post;
   final int index;
 
+  String _timeAgo(String? createdAt) {
+    if (createdAt == null) return '';
+    final dt = DateTime.tryParse(createdAt);
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    if (diff.inDays < 30) return '${diff.inDays}d ago';
+    return '${diff.inDays ~/ 30}mo ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -343,30 +355,31 @@ class _FeedPostCard extends StatelessWidget {
     final name = profile?['display_name'] as String? ?? 'User';
     final avatarUrl = profile?['avatar_url'] as String?;
     final badge = profile?['badge'] as String?;
-    final level = (profile?['level'] as int?) ?? 1;
+    final streakDays = (profile?['streak_days'] as num?)?.toInt() ?? 0;
     final body = post['content'] as String? ?? '';
     final tags = (post['tags'] as List<dynamic>?)?.cast<String>() ?? [];
     final imageUrls =
         (post['image_urls'] as List<dynamic>?)?.cast<String>() ?? [];
     final likes = post['likes_count'] as int? ?? 0;
     final comments = post['comments_count'] as int? ?? 0;
+    final createdAt = post['created_at'] as String?;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF13131F) : Colors.white,
+          color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: isDark
-              ? Border.all(color: Colors.white.withValues(alpha: 0.06))
+              ? Border.all(color: Colors.white.withValues(alpha: 0.08))
               : Border.all(color: const Color(0xFFE9EBF0)),
           boxShadow: isDark
               ? []
               : [
                   BoxShadow(
-                    color: AppColors.purple.withValues(alpha: 0.06),
-                    blurRadius: 24,
-                    offset: const Offset(0, 6),
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
                   ),
                 ],
         ),
@@ -376,118 +389,143 @@ class _FeedPostCard extends StatelessWidget {
           children: [
             // ── Author row ─────────────────────────────────────────────────
             Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _SmallAvatar(name: name, avatarUrl: avatarUrl),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        name,
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF111827),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (badge != null && badge.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: [
-                                  AppColors.purple.withValues(alpha: 0.13),
-                                  AppColors.teal.withValues(alpha: 0.10),
-                                ]),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                    color: AppColors.purple.withValues(alpha: 0.22)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(LucideIcons.sparkles,
-                                      size: 10, color: AppColors.purple),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'Lv $level',
+                      // Name + badge chip + time
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    name,
                                     style: GoogleFonts.inter(
-                                      fontSize: 11,
                                       fontWeight: FontWeight.w700,
-                                      color: AppColors.purple,
+                                      fontSize: 14,
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF111827),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (badge != null && badge.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF14B8A6)
+                                          .withValues(alpha: 0.12),
+                                      borderRadius:
+                                          BorderRadius.circular(999),
+                                      border: Border.all(
+                                          color: const Color(0xFF14B8A6)
+                                              .withValues(alpha: 0.28)),
+                                    ),
+                                    child: Text(
+                                      badge,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF0D9488),
+                                      ),
                                     ),
                                   ),
                                 ],
-                              ),
+                              ],
                             ),
+                          ),
+                          if (createdAt != null) ...[
                             const SizedBox(width: 6),
                             Text(
-                              badge,
+                              _timeAgo(createdAt),
                               style: GoogleFonts.inter(
                                 fontSize: 11,
-                                color: scheme.onSurface.withOpacity(0.55),
+                                color: isDark
+                                    ? Colors.white38
+                                    : const Color(0xFF9CA3AF),
                               ),
                             ),
                           ],
-                        ),
-                      ],
+                        ],
+                      ),
+                      // Day + first tag (sub-metadata line)
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (streakDays > 0) ...[
+                            Text(
+                              'Day $streakDays',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: isDark
+                                    ? Colors.white54
+                                    : const Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                          if (streakDays > 0 && tags.isNotEmpty)
+                            Text(
+                              '  ·  ',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: isDark
+                                    ? Colors.white38
+                                    : const Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          if (tags.isNotEmpty)
+                            Text(
+                              '#${tags.first}',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: isDark
+                                    ? Colors.white54
+                                    : const Color(0xFF6B7280),
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
+                Icon(
+                  LucideIcons.bookmark,
+                  size: 18,
+                  color: isDark
+                      ? Colors.white38
+                      : const Color(0xFFD1D5DB),
+                ),
               ],
             ),
-            // ── Tags ───────────────────────────────────────────────────────
-            if (tags.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: tags
-                    .map((t) => Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.purple.withValues(alpha: 0.09),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '#$t',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.purple,
-                            ),
-                          ),
-                        ))
-                    .toList(),
-              ),
-            ],
             // ── Body ───────────────────────────────────────────────────────
             const SizedBox(height: 12),
             Text(
               body,
               style: GoogleFonts.inter(
-                fontSize: 15,
-                height: 1.55,
-                color: scheme.onSurface.withOpacity(0.88),
+                fontSize: 14,
+                height: 1.6,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.85)
+                    : const Color(0xFF374151),
               ),
-              maxLines: 5,
-              overflow: TextOverflow.ellipsis,
             ),
             // ── Image ──────────────────────────────────────────────────────
             if (imageUrls.isNotEmpty) ...[
               const SizedBox(height: 14),
               ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
                 child: AspectRatio(
                   aspectRatio: 4 / 3,
                   child: Image.network(
@@ -499,14 +537,12 @@ class _FeedPostCard extends StatelessWidget {
                             color: isDark
                                 ? const Color(0xFF1E1E2E)
                                 : const Color(0xFFF0F1F5),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.purple,
-                                value: progress.expectedTotalBytes != null
-                                    ? progress.cumulativeBytesLoaded /
-                                        progress.expectedTotalBytes!
-                                    : null,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
                               ),
                             ),
                           ),
@@ -522,26 +558,92 @@ class _FeedPostCard extends StatelessWidget {
               ),
             ],
             // ── Actions ────────────────────────────────────────────────────
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Divider(
               color: isDark
                   ? Colors.white.withValues(alpha: 0.07)
-                  : const Color(0xFFF0F1F5),
+                  : const Color(0xFFF3F4F6),
               height: 1,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               children: [
-                _InlineAction(
-                  icon: LucideIcons.heart,
-                  label: '$likes',
-                  activeColor: AppColors.red,
+                // Like count
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      LucideIcons.heart,
+                      size: 16,
+                      color: isDark
+                          ? Colors.white38
+                          : const Color(0xFF9CA3AF),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$likes',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? Colors.white54
+                            : const Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _InlineAction(
-                  icon: LucideIcons.messageCircle,
-                  label: '$comments',
-                  activeColor: AppColors.teal,
+                const SizedBox(width: 16),
+                // Comment count
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      LucideIcons.messageCircle,
+                      size: 16,
+                      color: isDark
+                          ? Colors.white38
+                          : const Color(0xFF9CA3AF),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$comments',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? Colors.white54
+                            : const Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                // Encourage button
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14B8A6).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                        color:
+                            const Color(0xFF14B8A6).withValues(alpha: 0.22)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Encourage',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0D9488),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Text('🍯', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -551,8 +653,13 @@ class _FeedPostCard extends StatelessWidget {
     )
         .animate()
         .fadeIn(duration: 300.ms, delay: Duration(milliseconds: 40 * index))
-        .slideY(begin: 0.08, end: 0, duration: 300.ms, curve: Curves.easeOut,
-            delay: Duration(milliseconds: 40 * index));
+        .slideY(
+          begin: 0.08,
+          end: 0,
+          duration: 300.ms,
+          curve: Curves.easeOut,
+          delay: Duration(milliseconds: 40 * index),
+        );
   }
 }
 
@@ -605,48 +712,6 @@ class _AvatarFallback extends StatelessWidget {
             color: AppColors.purple,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _InlineAction extends StatelessWidget {
-  const _InlineAction(
-      {required this.icon, required this.label, required this.activeColor});
-  final IconData icon;
-  final String label;
-  final Color activeColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark
-        ? Colors.white.withValues(alpha: 0.6)
-        : AppColors.textSecondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.06)
-            : const Color(0xFFF4F5FA),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : const Color(0xFFE8EAF0),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: textColor),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-                fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
-          ),
-        ],
       ),
     );
   }
@@ -741,37 +806,28 @@ class _SupportBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  AppColors.purple.withValues(alpha: 0.20),
-                  AppColors.teal.withValues(alpha: 0.12),
-                ]
-              : [
-                  AppColors.purple.withValues(alpha: 0.07),
-                  AppColors.teal.withValues(alpha: 0.05),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: isDark ? const Color(0xFF1A2E2A) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: AppColors.purple.withValues(alpha: isDark ? 0.18 : 0.12)),
+          color: isDark
+              ? const Color(0xFF2A4A3E)
+              : const Color(0xFFD1FAE5),
+        ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.purple, AppColors.teal],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text('🌱', style: TextStyle(fontSize: 20)),
-          ),
+          const Text('🌱', style: TextStyle(fontSize: 28)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -787,16 +843,23 @@ class _SupportBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Be supportive • Be kind • Be real',
+                  'Be supportive · Be kind · Be real',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: isDark
-                        ? Colors.white60
+                        ? Colors.white54
                         : const Color(0xFF6B7280),
                   ),
                 ),
               ],
             ),
+          ),
+          Icon(
+            LucideIcons.arrowUpRight,
+            size: 18,
+            color: isDark
+                ? Colors.white38
+                : const Color(0xFF9CA3AF),
           ),
         ],
       ),
@@ -817,37 +880,53 @@ class _EmptyFeedState extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            width: 80,
-            height: 80,
+            width: 100,
+            height: 100,
             decoration: BoxDecoration(
               gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
                 colors: [
-                  AppColors.purple.withValues(alpha: 0.12),
-                  AppColors.teal.withValues(alpha: 0.08),
+                  AppColors.purple.withValues(alpha: 0.15),
+                  AppColors.teal.withValues(alpha: 0.1),
                 ],
               ),
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.purple.withValues(alpha: 0.1),
+                  blurRadius: 30,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            child: const Center(
-              child: Text('🌿', style: TextStyle(fontSize: 36)),
+            child: Center(
+              child: Icon(
+                LucideIcons.feather,
+                size: 40,
+                color: AppColors.purple.withValues(alpha: 0.7),
+              ),
             ),
+          ).animate().scale(
+            duration: 600.ms,
+            curve: Curves.elasticOut,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           Text(
             'Be the first gentle voice here',
             style: GoogleFonts.inter(
-              fontSize: 17,
+              fontSize: 18,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : const Color(0xFF111827),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             'Share a thought, a win, or a question.\nYour community is listening.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               fontSize: 14,
-              height: 1.6,
+              height: 1.5,
               color: isDark ? Colors.white54 : const Color(0xFF6B7280),
             ),
           ),

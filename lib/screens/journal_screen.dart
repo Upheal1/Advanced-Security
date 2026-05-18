@@ -119,10 +119,10 @@ class _JournalScreenState extends State<JournalScreen> {
       final entry = JournalEntry(
         id: now.microsecondsSinceEpoch.toString(),
         date: DateTime(now.year, now.month, now.day),
-        answers: [
-          QuestionAnswer(question: _activePrompt, answer: content),
-        ],
-        mood: _selectedMood,
+        entryText: content,
+        moodLabel: _selectedMood,
+        promptText: _activePrompt,
+        wordCount: _wordCount,
         timestamp: now,
         xpAwarded: 10 + (_wordCount ~/ 25).clamp(0, 30),
       );
@@ -959,7 +959,7 @@ class _HistoryEntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = entry.answers.isEmpty ? '' : entry.answers.first.answer;
+    final preview = entry.entryText;
     final previewLines = preview.split(RegExp(r'\s+')).take(14).join(' ');
 
     return Material(
@@ -987,7 +987,7 @@ class _HistoryEntryCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_moodEmoji(entry.mood), style: const TextStyle(fontSize: 22)),
+              Text(_moodEmoji(entry.moodLabel), style: const TextStyle(fontSize: 22)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1032,11 +1032,9 @@ class _HistoryEntryCard extends StatelessWidget {
   }
 
   int _wordCountForEntry(JournalEntry entry) {
-    final text = entry.answers.map((answer) => answer.answer).join(' ').trim();
-    if (text.isEmpty) {
-      return 0;
-    }
-    return text.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
+    final text = entry.entryText.trim();
+    if (text.isEmpty) return 0;
+    return text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
   }
 
   String _formatEntryDate(DateTime date) {
